@@ -194,7 +194,7 @@ Planned properties:
 
 ---
 
-### 3. Router als KI Schnittstelle für weitere Dienste / Router as AI Interface for Additional Services
+### 3. Router as AI Interface for Additional Services / Router als KI Schnittstelle für weitere Dienste
 
 **DE:**  
 Der Model Router ist nicht ausschließlich für PI Guardian vorgesehen.  
