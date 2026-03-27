@@ -1,8 +1,11 @@
+import { useEffect } from 'react';
 import { Card } from '../components/Card';
 import { StatusBadge } from '../components/StatusBadge';
 import { Layout } from '../components/Layout';
 import { CONFIG } from '../config';
-import type { ConnectionState } from '../types';
+import { fetchServiceStatus } from '../api/client';
+import { useApiCall } from '../hooks/useApi';
+import type { ConnectionState, ServiceStatus } from '../types';
 
 interface Props {
   connectionState: ConnectionState;
@@ -11,18 +14,14 @@ interface Props {
   onRefresh: () => void;
 }
 
-/**
- * Dashboard – Systemübersicht
- *
- * SOFORT NUTZBAR:
- *   - Health-Status, Verbindungsanzeige, letzter Check
- *
- * BACKEND ERFORDERLICH:
- *   - Dienststatus (GET /status/service)
- *   - Modellinfo (GET /models)
- *   - Systemmetriken (CPU, RAM, Temp)
- */
 export function Dashboard({ connectionState, lastCheck, healthError, onRefresh }: Props) {
+  const { data: serviceStatus, loading: statusLoading, error: statusError, execute } =
+    useApiCall<ServiceStatus>();
+
+  useEffect(() => {
+    execute(fetchServiceStatus).catch(() => {});
+  }, [execute]);
+
   return (
     <Layout title="Systemübersicht">
       <div className="grid grid--3">
@@ -67,23 +66,43 @@ export function Dashboard({ connectionState, lastCheck, healthError, onRefresh }
           </p>
         </Card>
 
-        {/* BACKEND ERFORDERLICH: GET /status/service */}
-        <Card title="Dienststatus" tag="GEPLANT">
-          <div className="kv">
-            <span className="kv__label">systemd</span>
-            <span className="kv__value text--muted">– Backend fehlt –</span>
-          </div>
-          <div className="kv">
-            <span className="kv__label">Uptime</span>
-            <span className="kv__value text--muted">– Backend fehlt –</span>
-          </div>
-          <div className="kv">
-            <span className="kv__label">PID</span>
-            <span className="kv__value text--muted">– Backend fehlt –</span>
-          </div>
-          <p className="text--muted text--sm" style={{ marginTop: '0.75rem' }}>
-            Erfordert: GET /status/service
-          </p>
+        {/* GET /status/service */}
+        <Card title="Dienststatus" tag="LIVE">
+          {statusLoading && (
+            <span className="text--muted">Lädt…</span>
+          )}
+          {statusError && !statusLoading && (
+            <div className="alert alert--error">{statusError}</div>
+          )}
+          {serviceStatus && !statusLoading && (
+            <>
+              <div className="kv">
+                <span className="kv__label">systemd</span>
+                <StatusBadge
+                  state={serviceStatus.active ? 'connected' : 'disconnected'}
+                  label={serviceStatus.active ? 'Aktiv' : 'Inaktiv'}
+                />
+              </div>
+              <div className="kv">
+                <span className="kv__label">Uptime</span>
+                <span className="kv__value">{serviceStatus.uptime ?? '–'}</span>
+              </div>
+              <div className="kv">
+                <span className="kv__label">PID</span>
+                <code className="kv__value">{serviceStatus.pid ?? '–'}</code>
+              </div>
+              <div className="kv">
+                <span className="kv__label">CPU</span>
+                <span className="kv__value">
+                  {serviceStatus.cpu_percent != null ? `${serviceStatus.cpu_percent} %` : '–'}
+                </span>
+              </div>
+              <div className="kv">
+                <span className="kv__label">Memory</span>
+                <span className="kv__value">{serviceStatus.memory_usage ?? '–'}</span>
+              </div>
+            </>
+          )}
         </Card>
       </div>
 
@@ -98,7 +117,6 @@ export function Dashboard({ connectionState, lastCheck, healthError, onRefresh }
 
         <Card title="Backend-Lücken (Phase 1)" tag="INFO">
           <ul className="gap-list">
-            <li><code>GET /status/service</code> – Dienststatus</li>
             <li><code>GET /models</code> – Modellliste</li>
             <li><code>POST /models/select</code> – Modellwechsel</li>
             <li><code>GET /settings</code> – Konfiguration lesen</li>
