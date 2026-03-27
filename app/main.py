@@ -18,15 +18,14 @@ stream_handler.setFormatter(formatter)
 
 level = logging.getLevelName(settings.LOG_LEVEL)
 
-for name in ("uvicorn", "uvicorn.access", "uvicorn.error", "fastapi"):
-    log = logging.getLogger(name)
-    log.setLevel(level)
-    log.addHandler(file_handler)
-
 root_logger = logging.getLogger()
 root_logger.setLevel(level)
 root_logger.addHandler(file_handler)
 root_logger.addHandler(stream_handler)
+
+for name in ("uvicorn", "uvicorn.access", "uvicorn.error"):
+    log = logging.getLogger(name)
+    log.propagate = True
 
 from fastapi import FastAPI
 
