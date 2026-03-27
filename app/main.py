@@ -6,15 +6,27 @@ from app.config import settings
 
 os.makedirs("logs", exist_ok=True)
 
-_stream_handler = logging.StreamHandler()
-_file_handler = RotatingFileHandler(
+formatter = logging.Formatter("%(asctime)s %(levelname)s %(name)s – %(message)s")
+
+file_handler = RotatingFileHandler(
     "logs/router.log", maxBytes=5 * 1024 * 1024, backupCount=3
 )
-logging.basicConfig(
-    level=logging.getLevelName(settings.LOG_LEVEL),
-    handlers=[_stream_handler, _file_handler],
-    format="%(asctime)s %(levelname)s %(name)s – %(message)s",
-)
+file_handler.setFormatter(formatter)
+
+stream_handler = logging.StreamHandler()
+stream_handler.setFormatter(formatter)
+
+level = logging.getLevelName(settings.LOG_LEVEL)
+
+for name in ("uvicorn", "uvicorn.access", "uvicorn.error", "fastapi"):
+    log = logging.getLogger(name)
+    log.setLevel(level)
+    log.addHandler(file_handler)
+
+root_logger = logging.getLogger()
+root_logger.setLevel(level)
+root_logger.addHandler(file_handler)
+root_logger.addHandler(stream_handler)
 
 from fastapi import FastAPI
 
