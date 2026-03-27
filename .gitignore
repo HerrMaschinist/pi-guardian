@@ -1,0 +1,8 @@
+router/.venv/
+router/**/__pycache__/
+router/**/*.pyc
+router/*.pyc
+router/logs/
+ui/node_modules/
+ui/dist/
+.env.local
