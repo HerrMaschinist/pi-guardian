@@ -1,0 +1,17 @@
+Status: active
+Logging: on (low)
+Default: deny (incoming), allow (outgoing), deny (routed)
+New profiles: skip
+
+To                         Action      From
+--                         ------      ----
+53/tcp                     ALLOW IN    192.168.50.0/24           
+53/udp                     ALLOW IN    192.168.50.0/24           
+8123/tcp                   ALLOW IN    192.168.50.0/24           
+81/tcp                     ALLOW IN    192.168.50.0/24           
+3001/tcp                   ALLOW IN    192.168.50.0/24           
+8090/tcp                   ALLOW IN    Anywhere                   # scanservjs
+22/tcp                     ALLOW IN    192.168.50.0/24           
+8001/tcp                   ALLOW IN    192.168.50.0/24           
+8090/tcp (v6)              ALLOW IN    Anywhere (v6)              # scanservjs
+

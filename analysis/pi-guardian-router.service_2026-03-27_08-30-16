@@ -1,0 +1,17 @@
+[Unit]
+Description=PI Guardian Model Router
+After=network-online.target
+Wants=network-online.target
+
+[Service]
+Type=simple
+User=alex
+Group=alex
+WorkingDirectory=/home/Alex/pi-guardian-router
+Environment=PYTHONPATH=/home/Alex/pi-guardian-router
+ExecStart=/home/Alex/pi-guardian-router/.venv/bin/uvicorn app.main:app --host 0.0.0.0 --port 8071
+Restart=always
+RestartSec=5
+
+[Install]
+WantedBy=multi-user.target

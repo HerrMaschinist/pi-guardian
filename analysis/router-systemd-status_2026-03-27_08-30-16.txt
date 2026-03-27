@@ -1,0 +1,16 @@
+● pi-guardian-router.service - PI Guardian Model Router
+     Loaded: loaded (/etc/systemd/system/pi-guardian-router.service; enabled; preset: enabled)
+     Active: active (running) since Mon 2026-03-23 21:18:16 CET; 3 days ago
+ Invocation: 3633c36baa014a21acab9c6ea9814c71
+   Main PID: 1383507 (uvicorn)
+      Tasks: 6 (limit: 9583)
+        CPU: 4min 35.726s
+     CGroup: /system.slice/pi-guardian-router.service
+             └─1383507 /home/Alex/pi-guardian-router/.venv/bin/python /home/Alex/pi-guardian-router/.venv/bin/uvicorn app.main:app --host 0.0.0.0 --port 8071
+
+Mar 23 21:18:16 PI systemd[1]: pi-guardian-router.service: Scheduled restart job, restart counter is at 1.
+Mar 23 21:18:16 PI systemd[1]: Started pi-guardian-router.service - PI Guardian Model Router.
+Mar 23 21:18:17 PI uvicorn[1383507]: INFO:     Started server process [1383507]
+Mar 23 21:18:17 PI uvicorn[1383507]: INFO:     Waiting for application startup.
+Mar 23 21:18:17 PI uvicorn[1383507]: INFO:     Application startup complete.
+Mar 23 21:18:17 PI uvicorn[1383507]: INFO:     Uvicorn running on http://0.0.0.0:8071 (Press CTRL+C to quit)
