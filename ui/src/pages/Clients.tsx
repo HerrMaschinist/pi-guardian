@@ -1,140 +1,203 @@
-import { useState } from 'react';
+import { useState, useEffect, useCallback } from 'react';
 import { Card } from '../components/Card';
 import { Layout } from '../components/Layout';
+import {
+  fetchClients,
+  createClient,
+  updateClient,
+  deleteClient,
+  ApiRequestError,
+} from '../api/client';
 import type { ClientEntry } from '../types';
 
-/**
- * Client-Verwaltung
- *
- * BACKEND ERFORDERLICH:
- *   - GET /clients
- *   - POST /clients
- *   - PUT /clients/:id
- *   - DELETE /clients/:id
- *
- * Die UI-Struktur steht vollständig.
- * Daten sind Mock bis die Backend-Endpunkte existieren.
- */
+type FormData = {
+  name: string;
+  description: string;
+  active: boolean;
+  allowed_ip: string;
+  allowed_routes: string[];
+};
 
-const MOCK_CLIENTS: ClientEntry[] = [
-  {
-    id: 'c1',
-    name: 'PIBot Telegram',
-    description: 'Telegram-Bot auf dem Pi',
-    active: true,
-    allowed_ip: '127.0.0.1',
-    allowed_routes: ['/route', '/health'],
-    api_key: '',
-  },
-  {
-    id: 'c2',
-    name: 'Werkstatt-Terminal',
-    description: 'Interner Client im LAN',
-    active: false,
-    allowed_ip: '192.168.50.0/24',
-    allowed_routes: ['/route'],
-    api_key: '',
-  },
-];
+const EMPTY_FORM: FormData = {
+  name: '',
+  description: '',
+  active: true,
+  allowed_ip: '192.168.50.0/24',
+  allowed_routes: ['/route', '/health'],
+};
 
 export function Clients() {
-  const [clients, setClients] = useState<ClientEntry[]>(MOCK_CLIENTS);
-  const [editId, setEditId] = useState<string | null>(null);
+  const [clients, setClients] = useState<ClientEntry[]>([]);
+  const [loading, setLoading] = useState(true);
+  const [error, setError] = useState<string | null>(null);
   const [showAdd, setShowAdd] = useState(false);
+  const [form, setForm] = useState<FormData>({ ...EMPTY_FORM });
+  const [submitting, setSubmitting] = useState(false);
+  const [actionId, setActionId] = useState<number | null>(null);
+  // API-Key einmalig nach Erstellung anzeigen
+  const [newApiKey, setNewApiKey] = useState<string | null>(null);
 
-  // Formular-State für Neuanlage
-  const emptyForm: Omit<ClientEntry, 'id'> = {
-    name: '',
-    description: '',
-    active: true,
-    allowed_ip: '',
-    allowed_routes: ['/route'],
-    api_key: '',
-  };
-  const [form, setForm] = useState(emptyForm);
+  const loadClients = useCallback(async () => {
+    setLoading(true);
+    setError(null);
+    try {
+      const data = await fetchClients();
+      setClients(data);
+    } catch (err) {
+      setError(err instanceof ApiRequestError ? err.message : 'Fehler beim Laden der Clients');
+    } finally {
+      setLoading(false);
+    }
+  }, []);
 
-  function handleToggle(id: string) {
-    setClients((prev) =>
-      prev.map((c) => (c.id === id ? { ...c, active: !c.active } : c))
-    );
-  }
+  useEffect(() => {
+    loadClients();
+  }, [loadClients]);
 
-  function handleDelete(id: string) {
-    setClients((prev) => prev.filter((c) => c.id !== id));
-  }
-
-  function handleAdd() {
+  async function handleAdd() {
     if (!form.name.trim()) return;
-    const newClient: ClientEntry = {
-      ...form,
-      id: `c${Date.now()}`,
-    };
-    setClients((prev) => [...prev, newClient]);
-    setForm(emptyForm);
-    setShowAdd(false);
+    setSubmitting(true);
+    setError(null);
+    try {
+      const created = await createClient({
+        name: form.name,
+        description: form.description,
+        active: form.active,
+        allowed_ip: form.allowed_ip,
+        allowed_routes: form.allowed_routes,
+      });
+      setClients((prev) => [created, ...prev]);
+      if (created.api_key) {
+        setNewApiKey(created.api_key);
+      }
+      setForm({ ...EMPTY_FORM });
+      setShowAdd(false);
+    } catch (err) {
+      setError(err instanceof ApiRequestError ? err.message : 'Fehler beim Erstellen');
+    } finally {
+      setSubmitting(false);
+    }
+  }
+
+  async function handleToggle(c: ClientEntry) {
+    setActionId(c.id);
+    setError(null);
+    try {
+      const updated = await updateClient(c.id, { active: !c.active });
+      setClients((prev) => prev.map((x) => (x.id === updated.id ? updated : x)));
+    } catch (err) {
+      setError(err instanceof ApiRequestError ? err.message : 'Fehler beim Aktualisieren');
+    } finally {
+      setActionId(null);
+    }
+  }
+
+  async function handleDelete(c: ClientEntry) {
+    if (!confirm(`Client "${c.name}" wirklich loeschen?`)) return;
+    setActionId(c.id);
+    setError(null);
+    try {
+      await deleteClient(c.id);
+      setClients((prev) => prev.filter((x) => x.id !== c.id));
+    } catch (err) {
+      setError(err instanceof ApiRequestError ? err.message : 'Fehler beim Loeschen');
+    } finally {
+      setActionId(null);
+    }
   }
 
   return (
     <Layout title="Client-Verwaltung">
-      <div className="alert alert--warn" style={{ marginBottom: '1.5rem' }}>
-        <strong>Backend fehlt:</strong> Diese Seite arbeitet mit lokalen Mock-Daten.
-        Für persistente Client-Verwaltung werden GET/POST/PUT/DELETE /clients benötigt.
-      </div>
+      {/* API-Key-Anzeige nach Erstellung */}
+      {newApiKey && (
+        <div className="alert alert--ok" style={{ marginBottom: '1.5rem' }}>
+          <strong>Neuer API-Key (wird nicht erneut angezeigt):</strong>
+          <br />
+          <code style={{ userSelect: 'all', fontSize: '0.9rem' }}>{newApiKey}</code>
+          <br />
+          <button
+            className="btn btn--sm btn--ghost"
+            style={{ marginTop: '0.5rem' }}
+            onClick={() => setNewApiKey(null)}
+          >
+            Verstanden
+          </button>
+        </div>
+      )}
 
-      <Card title="Registrierte Clients" tag="MOCK">
-        <table className="table">
-          <thead>
-            <tr>
-              <th>Name</th>
-              <th>Beschreibung</th>
-              <th>IP / Host</th>
-              <th>Routen</th>
-              <th>Status</th>
-              <th>Aktionen</th>
-            </tr>
-          </thead>
-          <tbody>
-            {clients.map((c) => (
-              <tr key={c.id}>
-                <td><strong>{c.name}</strong></td>
-                <td className="text--muted">{c.description}</td>
-                <td><code>{c.allowed_ip}</code></td>
-                <td><code>{c.allowed_routes.join(', ')}</code></td>
-                <td>
-                  {c.active ? (
-                    <span className="badge badge--ok"><span className="badge__dot" />Aktiv</span>
-                  ) : (
-                    <span className="badge badge--fail"><span className="badge__dot" />Inaktiv</span>
-                  )}
-                </td>
-                <td>
-                  <div className="btn-group">
-                    <button className="btn btn--sm btn--ghost" onClick={() => handleToggle(c.id)}>
-                      {c.active ? 'Deaktivieren' : 'Aktivieren'}
-                    </button>
-                    <button className="btn btn--sm btn--danger" onClick={() => handleDelete(c.id)}>
-                      Entfernen
-                    </button>
-                  </div>
-                </td>
-              </tr>
-            ))}
-            {clients.length === 0 && (
+      {error && (
+        <div className="alert alert--error" style={{ marginBottom: '1.5rem' }}>
+          {error}
+        </div>
+      )}
+
+      <Card title="Registrierte Clients" tag="LIVE">
+        {loading ? (
+          <span className="text--muted">Laedt...</span>
+        ) : (
+          <table className="table">
+            <thead>
               <tr>
-                <td colSpan={6} className="text--muted" style={{ textAlign: 'center' }}>
-                  Keine Clients registriert.
-                </td>
+                <th>Name</th>
+                <th>Beschreibung</th>
+                <th>IP / Host</th>
+                <th>Routen</th>
+                <th>Status</th>
+                <th>Aktionen</th>
               </tr>
-            )}
-          </tbody>
-        </table>
+            </thead>
+            <tbody>
+              {clients.map((c) => (
+                <tr key={c.id}>
+                  <td><strong>{c.name}</strong></td>
+                  <td className="text--muted">{c.description}</td>
+                  <td><code>{c.allowed_ip}</code></td>
+                  <td><code>{c.allowed_routes.join(', ')}</code></td>
+                  <td>
+                    {c.active ? (
+                      <span className="badge badge--ok"><span className="badge__dot" />Aktiv</span>
+                    ) : (
+                      <span className="badge badge--fail"><span className="badge__dot" />Inaktiv</span>
+                    )}
+                  </td>
+                  <td>
+                    <div className="btn-group">
+                      <button
+                        className="btn btn--sm btn--ghost"
+                        onClick={() => handleToggle(c)}
+                        disabled={actionId === c.id}
+                      >
+                        {actionId === c.id ? '...' : c.active ? 'Deaktivieren' : 'Aktivieren'}
+                      </button>
+                      <button
+                        className="btn btn--sm btn--danger"
+                        onClick={() => handleDelete(c)}
+                        disabled={actionId === c.id}
+                      >
+                        Entfernen
+                      </button>
+                    </div>
+                  </td>
+                </tr>
+              ))}
+              {clients.length === 0 && (
+                <tr>
+                  <td colSpan={6} className="text--muted" style={{ textAlign: 'center' }}>
+                    Keine Clients registriert.
+                  </td>
+                </tr>
+              )}
+            </tbody>
+          </table>
+        )}
 
         <button
           className="btn"
           onClick={() => setShowAdd(!showAdd)}
           style={{ marginTop: '1rem' }}
+          disabled={loading}
         >
-          {showAdd ? 'Abbrechen' : 'Client hinzufügen'}
+          {showAdd ? 'Abbrechen' : 'Client hinzufuegen'}
         </button>
 
         {showAdd && (
@@ -165,7 +228,7 @@ export function Clients() {
                 className="form-input"
                 value={form.description}
                 onChange={(e) => setForm({ ...form, description: e.target.value })}
-                placeholder="Wofür wird dieser Client genutzt?"
+                placeholder="Wofuer wird dieser Client genutzt?"
               />
             </div>
             <div className="form-group">
@@ -176,14 +239,21 @@ export function Clients() {
                 onChange={(e) =>
                   setForm({
                     ...form,
-                    allowed_routes: e.target.value.split(',').map((s) => s.trim()).filter(Boolean),
+                    allowed_routes: e.target.value
+                      .split(',')
+                      .map((s) => s.trim())
+                      .filter(Boolean),
                   })
                 }
                 placeholder="/route, /health"
               />
             </div>
-            <button className="btn" onClick={handleAdd}>
-              Speichern (lokal)
+            <button
+              className="btn"
+              onClick={handleAdd}
+              disabled={submitting || !form.name.trim()}
+            >
+              {submitting ? 'Speichert...' : 'Client anlegen'}
             </button>
           </div>
         )}

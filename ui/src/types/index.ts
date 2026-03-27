@@ -38,13 +38,14 @@ export interface OllamaModel {
 }
 
 export interface ClientEntry {
-  id: string;
+  id: number;
   name: string;
   description: string;
   active: boolean;
   allowed_ip: string;
   allowed_routes: string[];
   api_key?: string;
+  created_at?: string;
 }
 
 export interface LogEntry {

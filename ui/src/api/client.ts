@@ -55,6 +55,10 @@ async function apiFetch<T>(path: string, options: FetchOptions = {}): Promise<T>
       );
     }
 
+    if (response.status === 204) {
+      return undefined as T;
+    }
+
     return await response.json();
   } catch (err) {
     if (err instanceof ApiRequestError) throw err;
@@ -147,7 +151,7 @@ export async function createClient(client: Omit<ClientEntry, 'id'>): Promise<Cli
 }
 
 /** PUT /clients/:id – Client aktualisieren */
-export async function updateClient(id: string, client: Partial<ClientEntry>): Promise<ClientEntry> {
+export async function updateClient(id: number, client: Partial<ClientEntry>): Promise<ClientEntry> {
   return apiFetch<ClientEntry>(`/clients/${id}`, {
     method: 'PUT',
     body: JSON.stringify(client),
@@ -155,7 +159,7 @@ export async function updateClient(id: string, client: Partial<ClientEntry>): Pr
 }
 
 /** DELETE /clients/:id – Client entfernen */
-export async function deleteClient(id: string): Promise<void> {
+export async function deleteClient(id: number): Promise<void> {
   await apiFetch<void>(`/clients/${id}`, { method: 'DELETE' });
 }
 

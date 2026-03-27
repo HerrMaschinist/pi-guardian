@@ -4,5 +4,7 @@ router/**/*.pyc
 router/*.pyc
 router/logs/*
 !router/logs/.gitkeep
+router/data/*
+!router/data/.gitkeep
 ui/node_modules/
 .env.local

@@ -1,5 +1,6 @@
 import logging
 import os
+from contextlib import asynccontextmanager
 from logging.handlers import RotatingFileHandler
 
 from app.config import settings
@@ -24,11 +25,12 @@ root_logger.addHandler(file_handler)
 root_logger.addHandler(stream_handler)
 
 for name in ("uvicorn", "uvicorn.access", "uvicorn.error"):
-    log = logging.getLogger(name)
-    log.propagate = True
+    logging.getLogger(name).propagate = True
 
 from fastapi import FastAPI, Query
 
+from app.database import init_db
+from app.router.clients import router as clients_router
 from app.router.log_reader import read_logs
 from app.router.ollama_models import fetch_models
 from app.router.service import route_prompt
@@ -44,11 +46,20 @@ from app.schemas.response_models import (
 )
 
 
+@asynccontextmanager
+async def lifespan(app: FastAPI):
+    init_db()
+    yield
+
+
 app = FastAPI(
     title="PI Guardian Model Router",
     version="0.1.0",
     description="Lokaler FastAPI-Router für Ollama-Modelle auf dem Raspberry Pi",
+    lifespan=lifespan,
 )
+
+app.include_router(clients_router)
 
 
 @app.get("/health")
