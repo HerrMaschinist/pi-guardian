@@ -1,26 +1,17 @@
-import { useState } from 'react';
+import { useState, useEffect } from 'react';
 import { Card } from '../components/Card';
 import { Layout } from '../components/Layout';
+import { fetchSettings } from '../api/client';
+import { useApiCall } from '../hooks/useApi';
 import { CONFIG } from '../config';
 import type { RouterSettings } from '../types';
-
-/**
- * Router-Einstellungen
- *
- * BACKEND ERFORDERLICH:
- *   - GET /settings – Konfiguration laden
- *   - PUT /settings – Konfiguration speichern
- *
- * Die UI zeigt die erwartete Konfigurationsstruktur.
- * Werte sind Defaults/Annahmen bis GET /settings implementiert ist.
- */
 
 const DEFAULT_SETTINGS: RouterSettings = {
   router_host: '0.0.0.0',
   router_port: CONFIG.routerPort,
   ollama_host: '127.0.0.1',
   ollama_port: 11434,
-  timeout: 30,
+  timeout: 120,
   default_model: CONFIG.defaultModel,
   logging_level: 'INFO',
   stream_default: false,
@@ -30,14 +21,21 @@ export function Settings() {
   const [settings, setSettings] = useState<RouterSettings>({ ...DEFAULT_SETTINGS });
   const [saved, setSaved] = useState(false);
 
+  const { loading, error, execute } = useApiCall<RouterSettings>();
+
+  useEffect(() => {
+    execute(fetchSettings).then((result) => {
+      if (result) setSettings(result);
+    }).catch(() => {});
+  }, [execute]);
+
   function handleChange(key: keyof RouterSettings, value: string | number | boolean) {
     setSettings((prev) => ({ ...prev, [key]: value }));
     setSaved(false);
   }
 
   function handleSave() {
-    // BACKEND ERFORDERLICH: PUT /settings
-    // Aktuell nur lokaler State, kein persistentes Speichern.
+    // PUT /settings folgt in Phase 3
     console.log('[Settings] Würde speichern:', settings);
     setSaved(true);
     setTimeout(() => setSaved(false), 3000);
@@ -51,12 +49,20 @@ export function Settings() {
   return (
     <Layout title="Router-Einstellungen">
       <div className="alert alert--warn" style={{ marginBottom: '1.5rem' }}>
-        <strong>Backend fehlt:</strong> Änderungen werden nur lokal im Browser gehalten.
-        Persistentes Speichern erfordert GET /settings und PUT /settings.
+        <strong>Hinweis:</strong> Änderungen werden noch nicht gespeichert
+        (PUT /settings folgt in Phase 3).
       </div>
 
+      {error && (
+        <div className="alert alert--error" style={{ marginBottom: '1.5rem' }}>
+          Einstellungen konnten nicht geladen werden: {error}
+        </div>
+      )}
+
+      {loading && <span className="text--muted" style={{ marginBottom: '1.5rem', display: 'block' }}>Lädt…</span>}
+
       <div className="grid grid--2">
-        <Card title="Router" tag="GEPLANT">
+        <Card title="Router" tag="LIVE">
           <div className="form-group">
             <label className="form-label">Host</label>
             <input
@@ -89,7 +95,7 @@ export function Settings() {
           </div>
         </Card>
 
-        <Card title="Ollama" tag="GEPLANT">
+        <Card title="Ollama" tag="LIVE">
           <div className="form-group">
             <label className="form-label">Host</label>
             <input
@@ -120,7 +126,7 @@ export function Settings() {
       </div>
 
       <div style={{ marginTop: '1.5rem' }}>
-        <Card title="Modell & Verhalten" tag="GEPLANT">
+        <Card title="Modell & Verhalten" tag="LIVE">
           <div className="grid grid--2">
             <div className="form-group">
               <label className="form-label">Standardmodell</label>

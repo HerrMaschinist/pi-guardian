@@ -1,33 +1,23 @@
-import { useState } from 'react';
+import { useState, useEffect } from 'react';
 import { Card } from '../components/Card';
 import { Layout } from '../components/Layout';
-import { sendRoute, ApiRequestError } from '../api/client';
+import { sendRoute, fetchModels, ApiRequestError } from '../api/client';
+import { useApiCall } from '../hooks/useApi';
 import { CONFIG } from '../config';
-import type { RouteResponse } from '../types';
+import type { OllamaModel, RouteResponse } from '../types';
 
-/**
- * Modellverwaltung
- *
- * SOFORT NUTZBAR:
- *   - Testanfrage an das aktive Modell über POST /route
- *
- * BACKEND ERFORDERLICH:
- *   - Modellliste (GET /models)
- *   - Modellwechsel (POST /models/select)
- */
 export function Models() {
   const [testPrompt, setTestPrompt] = useState('Antworte kurz: Was ist 2+2?');
   const [testResult, setTestResult] = useState<RouteResponse | null>(null);
   const [testError, setTestError] = useState<string | null>(null);
   const [testing, setTesting] = useState(false);
 
-  // Bekanntes Modell (aus Config, bis GET /models verfügbar)
-  const currentModel = CONFIG.defaultModel;
+  const { data: models, loading: modelsLoading, error: modelsError, execute } =
+    useApiCall<OllamaModel[]>();
 
-  // MOCK: Modellliste – wird durch GET /models ersetzt
-  const mockModels = [
-    { name: CONFIG.defaultModel, size: '~930 MB', active: true },
-  ];
+  useEffect(() => {
+    execute(fetchModels).catch(() => {});
+  }, [execute]);
 
   async function handleTest() {
     setTesting(true);
@@ -50,7 +40,7 @@ export function Models() {
         <Card title="Aktives Modell" tag="LIVE">
           <div className="kv">
             <span className="kv__label">Modell</span>
-            <code className="kv__value kv__value--highlight">{currentModel}</code>
+            <code className="kv__value kv__value--highlight">{CONFIG.defaultModel}</code>
           </div>
           <div className="kv">
             <span className="kv__label">Backend</span>
@@ -58,30 +48,39 @@ export function Models() {
           </div>
         </Card>
 
-        {/* Modellliste – BACKEND ERFORDERLICH */}
-        <Card title="Verfügbare Modelle" tag="GEPLANT">
-          <table className="table">
-            <thead>
-              <tr>
-                <th>Modell</th>
-                <th>Größe</th>
-                <th>Status</th>
-              </tr>
-            </thead>
-            <tbody>
-              {mockModels.map((m) => (
-                <tr key={m.name}>
-                  <td><code>{m.name}</code></td>
-                  <td>{m.size}</td>
-                  <td>{m.active ? <span className="badge badge--ok"><span className="badge__dot" />Aktiv</span> : '–'}</td>
+        {/* Modellliste */}
+        <Card title="Verfügbare Modelle" tag="LIVE">
+          {modelsLoading && <span className="text--muted">Lädt…</span>}
+          {modelsError && <div className="alert alert--error">{modelsError}</div>}
+          {!modelsLoading && !modelsError && (
+            <table className="table">
+              <thead>
+                <tr>
+                  <th>Modell</th>
+                  <th>Größe</th>
+                  <th>Status</th>
                 </tr>
-              ))}
-            </tbody>
-          </table>
-          <p className="text--muted text--sm" style={{ marginTop: '0.75rem' }}>
-            Vollständige Modellliste erfordert: GET /models.
-            Modellwechsel erfordert: POST /models/select.
-          </p>
+              </thead>
+              <tbody>
+                {(models ?? []).map((m) => (
+                  <tr key={m.name}>
+                    <td><code>{m.name}</code></td>
+                    <td>{m.size}</td>
+                    <td>
+                      {m.name === CONFIG.defaultModel
+                        ? <span className="badge badge--ok"><span className="badge__dot" />Aktiv</span>
+                        : '–'}
+                    </td>
+                  </tr>
+                ))}
+                {(models ?? []).length === 0 && (
+                  <tr>
+                    <td colSpan={3} className="text--muted">Keine Modelle gefunden.</td>
+                  </tr>
+                )}
+              </tbody>
+            </table>
+          )}
         </Card>
       </div>
 
