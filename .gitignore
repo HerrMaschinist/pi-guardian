@@ -2,6 +2,7 @@ router/.venv/
 router/**/__pycache__/
 router/**/*.pyc
 router/*.pyc
-router/logs/
+router/logs/*
+!router/logs/.gitkeep
 ui/node_modules/
 .env.local
