@@ -1,0 +1,68 @@
+# PI Guardian Repair Log
+
+Date: 2026-04-17
+
+## Ausgangslage
+- Projekt wurde aus einem früheren Restore-Zustand wiederhergestellt.
+- Verdacht auf Mischstand aus altem Frontend-Build, Router-Code und Konfiguration.
+
+## Aktuelle Symptome
+- Agents-Seite leer.
+- Memory-Seite leer.
+- Dienststatus zeigt keine Backend-Werte für System, Uptime und PID.
+- Nur das 1.5B Modell ist sichtbar; das 3B Modell fehlt.
+
+## Analyse-Schritte
+- Projektstruktur geprüft und zwei getrennte Frontend-Bäume gefunden: `ui/` als nginx-Root und `router/src/` als legacy Kopie.
+- Systemd-Unit und Router-Logs geprüft: Router läuft über uvicorn auf Port `8071`.
+- nginx-Konfiguration geprüft: `/home/alex/pi-guardian/ui/dist` wird ausgeliefert und `/api/` auf `127.0.0.1:8071` proxied.
+- Router-Datenbank geprüft: Agenten-, Skill-, Action- und Laufzeitdaten sind vorhanden.
+- Backend-Schemas geprüft: `/route` erwartet `prompt`, `preferred_model`, `stream`; `/status/service` liefert echte Systemwerte; `/memory` liefert Run-Snapshots und Incident-/Knowledge-/Feedback-Daten.
+- Frontend-Dateien geprüft: Dashboard, Models, Settings und Memory enthalten noch Platzhalter oder nutzen ältere Request-/Response-Formate.
+
+## Wesentliche Befunde
+- Das Deploy-Frontend in `ui/dist` war nicht defekt als Build-Artefakt, sondern spiegelte den vorhandenen Source-Stand mit Platzhaltern wider.
+- `ui/src/pages/Dashboard.tsx` zeigt den Dienststatus nur als statischen Platzhalter.
+- `ui/src/pages/Models.tsx` nutzt eine Mock-Modellliste und sendet für `/route` ein altes Request-Format.
+- `ui/src/pages/Diagnostics.tsx` sendet ebenfalls das alte `/route`-Format.
+- `ui/src/pages/History.tsx` liest History-Felder aus einem alten Schema und zeigt deshalb unvollständige Inhalte.
+- `ui/src/pages/Memory.tsx` bindet die eigentliche Memory-API nicht an und zeigt nur Agenten-/Skill-/Action-Snapshots plus lokale Browser-Notizen.
+- `ui/.env` enthält noch `VITE_ROUTER_PORT=8070`, obwohl der Router auf `8071` läuft.
+- Die Router-Datenbank enthält 4 Agenten, 7 Skills und 3 Actions; die Leere ist also kein reines Backend-Datenproblem.
+- Die geschützten Router-Routen waren vom aktuellen Browser-Client nicht erreichbar, weil der UI-Initialflow den Admin-Bootstrap nicht zuverlässig auslöst.
+- Der Router besitzt zwar einen persistenten Admin-Client mit `/memory` und `/models`, aber ohne Bootstrap-Session landete der Browser auf einem eingeschränkten Client-Pfad.
+
+## Durchgeführte Änderungen
+- `ui/.env`: Router-Port auf `8071` korrigiert und `VITE_LARGE_MODEL=qwen2.5-coder:3b` ergänzt.
+- `ui/src/config.ts`: Frontend-Konfiguration um `largeModel` ergänzt.
+- `ui/src/types/index.ts`: Request-, Response- und Status-Typen an die echten Router-Schemas angepasst.
+- `ui/src/api/client.ts`: Memory-Endpoints ergänzt, Settings-Antworttyp korrigiert und Auth-Retry nach `401/403` eingebaut.
+- `ui/src/App.tsx`: Admin-Bootstrap beim App-Start angestoßen.
+- `ui/src/pages/Dashboard.tsx`: echten Dienststatus statt Platzhalterdaten eingebunden.
+- `ui/src/pages/Models.tsx`: echte Modellliste und echte Route-Antworten eingebunden.
+- `ui/src/pages/Diagnostics.tsx`: Route-Aufrufe auf das aktuelle Backend-Format umgestellt.
+- `ui/src/pages/History.tsx`: History-Rows auf die aktuellen Backend-Felder umgestellt.
+- `ui/src/pages/Memory.tsx`: Memory-Ansicht auf echte Runs, Incidents, Knowledge und Feedback umgestellt.
+- `ui/src/pages/Settings.tsx`: Live-Settings-Load/Save gegen den Router aktiviert.
+- `ui/src/pages/Agents.tsx`: verschachtelte Agent-Settings lesbar zusammengefasst.
+- `ui/src/pages/Clients.tsx`: Typinkonsistenz bei `id` behoben, damit der Build wieder sauber durchläuft.
+
+## Warum diese Änderungen nötig waren
+- Die UI und das Router-Backend liefen nach dem Restore mit unterschiedlichen Verträgen: einige Seiten erwarteten alte Request-/Response-Formate oder zeigten statische Platzhalter.
+- Der Router liefert für `/models` und `/memory` nur dann Daten, wenn die Admin-Session korrekt gebootstrapped ist und der richtige Client mit ausreichenden Routen verwendet wird.
+- Ohne den Bootstrap-Flow blieb die UI in einem Zustand, in dem die geschützten Seiten leer wirkten, obwohl Backend-Daten vorhanden waren.
+
+## Testergebnisse
+- Frontend-Build erfolgreich mit `npm run build` im Verzeichnis `/home/alex/pi-guardian/ui`.
+- `GET /health` liefert `{"status":"ok"}`.
+- Mit Browser-ähnlicher IP und Bootstrap-Session liefert `GET /models` die Modelle `qwen2.5-coder:3b` und `qwen2.5-coder:1.5b`.
+- Mit derselben Session liefert `GET /memory` echte Run-Snapshots statt leerer Antworten.
+- Mit derselben Session liefern auch `GET /agents` und `GET /history?limit=3` echte Backend-Daten.
+- `GET /status/service` liefert echte Backend-Werte für Service, Laufzeit und PID.
+- Router-Dienst läuft weiter aktiv über systemd und uvicorn auf Port `8071`.
+- `journalctl -u pi-guardian-router.service -n 20 --no-pager` zeigt nach dem Fix 200er-Antworten für `auth/bootstrap`, `models`, `memory`, `status/service`, `agents` und `history`.
+
+## Offener Reststatus
+- Der Container-Testzugriff auf `127.0.0.1` ohne Browser-IP scheitert weiterhin an der IP-Berechtigung; das ist für die reale Browser-Nutzung kein Fehler, sondern Teil der Router-Policy.
+- Die Bootstrap-Session muss aus dem Browser heraus aufgebaut werden; die UI stößt das nun automatisch an.
+- Falls später ein anderer LAN-Client dieselbe Oberfläche nutzt, muss dessen IP ebenfalls im erlaubten Bereich liegen.

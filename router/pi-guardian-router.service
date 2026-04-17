@@ -1,0 +1,32 @@
+[Unit]
+Description=PI Guardian Model Router
+After=network-online.target
+Wants=network-online.target
+
+[Service]
+Type=simple
+User=alex
+Group=alex
+WorkingDirectory=/home/alex/pi-guardian/router
+EnvironmentFile=/home/alex/pi-guardian/router/.env
+Environment=PYTHONPATH=/home/alex/pi-guardian/router
+ExecStart=/bin/sh -c 'exec /home/alex/pi-guardian/router/.venv/bin/uvicorn app.main:app --host "${ROUTER_HOST:-127.0.0.1}" --port "${ROUTER_PORT:-8071}"'
+Restart=always
+RestartSec=5
+NoNewPrivileges=true
+PrivateTmp=true
+PrivateDevices=true
+ProtectHome=true
+ProtectSystem=full
+ProtectControlGroups=true
+ProtectKernelTunables=true
+ProtectKernelModules=true
+LockPersonality=true
+RestrictSUIDSGID=true
+MemoryDenyWriteExecute=true
+UMask=0077
+ReadWritePaths=/home/alex/pi-guardian/router/data /home/alex/pi-guardian/router/logs /home/alex/pi-guardian/router/.env
+RestrictAddressFamilies=AF_UNIX AF_INET AF_INET6
+
+[Install]
+WantedBy=multi-user.target

@@ -1,4 +1,26 @@
-node_modules/
-*.local
-.env.local
-.env.*.local
+# lokale Secrets
+router/.env
+ui/.env
+
+# Python
+router/.venv/
+router/.pytest_cache/
+router/**/__pycache__/
+router/**/*.pyc
+router/*.pyc
+
+# Laufzeitdaten
+router/data/*
+!router/data/.gitkeep
+router/logs/*
+!router/logs/.gitkeep
+
+# UI
+ui/node_modules/
+ui/dist/
+
+# allgemein
+*.log
+*.sqlite
+*.sqlite3
+*.db

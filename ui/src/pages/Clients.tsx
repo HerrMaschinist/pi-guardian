@@ -1,0 +1,408 @@
+import { useEffect, useMemo, useState } from 'react';
+import { Card } from '../components/Card';
+import { Layout } from '../components/Layout';
+import {
+  ApiRequestError,
+  createClient,
+  deleteClient,
+  fetchClients,
+  updateClient,
+} from '../api/client';
+import type { ClientEntry } from '../types';
+
+type ClientFormState = {
+  name: string;
+  description: string;
+  active: boolean;
+  allowed_ip: string;
+  allowed_routes_text: string;
+};
+
+const EMPTY_FORM: ClientFormState = {
+  name: '',
+  description: '',
+  active: true,
+  allowed_ip: '',
+  allowed_routes_text: '/route',
+};
+
+function routesToText(routes: string[]): string {
+  return routes.join(', ');
+}
+
+function parseRoutes(text: string): string[] {
+  return text
+    .split(',')
+    .map((route) => route.trim())
+    .filter(Boolean);
+}
+
+function clientToForm(client: ClientEntry): ClientFormState {
+  return {
+    name: client.name,
+    description: client.description ?? '',
+    active: client.active,
+    allowed_ip: client.allowed_ip,
+    allowed_routes_text: routesToText(client.allowed_routes ?? []),
+  };
+}
+
+function makePayload(form: ClientFormState): Omit<ClientEntry, 'id'> {
+  return {
+    name: form.name.trim(),
+    description: form.description.trim(),
+    active: form.active,
+    allowed_ip: form.allowed_ip.trim(),
+    allowed_routes: parseRoutes(form.allowed_routes_text),
+    api_key: '',
+  };
+}
+
+export function Clients() {
+  const [clients, setClients] = useState<ClientEntry[]>([]);
+  const [loading, setLoading] = useState(true);
+  const [saving, setSaving] = useState(false);
+  const [error, setError] = useState('');
+  const [form, setForm] = useState<ClientFormState>(EMPTY_FORM);
+  const [editingId, setEditingId] = useState<number | string | null>(null);
+  const [notice, setNotice] = useState('');
+  const [createdApiKey, setCreatedApiKey] = useState('');
+
+  const sortedClients = useMemo(() => {
+    return [...clients].sort((a, b) => {
+      const aName = a.name.toLowerCase();
+      const bName = b.name.toLowerCase();
+      if (aName < bName) return -1;
+      if (aName > bName) return 1;
+      return String(a.id).localeCompare(String(b.id));
+    });
+  }, [clients]);
+
+  async function loadClients() {
+    setLoading(true);
+    setError('');
+    try {
+      const data = await fetchClients();
+      setClients(data);
+    } catch (err) {
+      setClients([]);
+      setError(err instanceof ApiRequestError ? err.message : 'Clients konnten nicht geladen werden');
+    } finally {
+      setLoading(false);
+    }
+  }
+
+  useEffect(() => {
+    void loadClients();
+  }, []);
+
+  function resetForm() {
+    setForm(EMPTY_FORM);
+    setEditingId(null);
+  }
+
+  function startCreate() {
+    setNotice('');
+    setCreatedApiKey('');
+    resetForm();
+  }
+
+  function startEdit(client: ClientEntry) {
+    setNotice('');
+    setCreatedApiKey('');
+    setEditingId(client.id);
+    setForm(clientToForm(client));
+  }
+
+  function validateForm(): string | null {
+    if (!form.name.trim()) return 'Name darf nicht leer sein.';
+    if (!form.allowed_ip.trim()) return 'IP / Subnetz darf nicht leer sein.';
+    if (parseRoutes(form.allowed_routes_text).length === 0) {
+      return 'Mindestens eine Route muss angegeben werden.';
+    }
+    return null;
+  }
+
+  async function handleSubmit() {
+    const validationError = validateForm();
+    if (validationError) {
+      setError(validationError);
+      return;
+    }
+
+    setSaving(true);
+    setError('');
+    try {
+      const payload = makePayload(form);
+      if (editingId !== null) {
+        await updateClient(String(editingId), payload);
+        setNotice(`Client ${form.name.trim()} wurde aktualisiert.`);
+        setCreatedApiKey('');
+      } else {
+        const created = await createClient(payload);
+        setNotice(`Client ${created.name} wurde angelegt.`);
+        setCreatedApiKey(created.api_key ?? '');
+      }
+      await loadClients();
+      resetForm();
+    } catch (err) {
+      setError(err instanceof ApiRequestError ? err.message : 'Client konnte nicht gespeichert werden');
+    } finally {
+      setSaving(false);
+    }
+  }
+
+  async function handleDelete(client: ClientEntry) {
+    const confirmed = window.confirm(`Client "${client.name}" wirklich löschen?`);
+    if (!confirmed) return;
+
+    setSaving(true);
+    setError('');
+    try {
+      await deleteClient(String(client.id));
+      setNotice(`Client ${client.name} wurde gelöscht.`);
+      setCreatedApiKey('');
+      await loadClients();
+      if (editingId === client.id) {
+        resetForm();
+      }
+    } catch (err) {
+      setError(err instanceof ApiRequestError ? err.message : 'Client konnte nicht gelöscht werden');
+    } finally {
+      setSaving(false);
+    }
+  }
+
+  async function handleToggleActive(client: ClientEntry) {
+    setSaving(true);
+    setError('');
+    try {
+      await updateClient(String(client.id), { active: !client.active });
+      setNotice(`Client ${client.name} ist jetzt ${client.active ? 'inaktiv' : 'aktiv'}.`);
+      await loadClients();
+    } catch (err) {
+      setError(err instanceof ApiRequestError ? err.message : 'Status konnte nicht geändert werden');
+    } finally {
+      setSaving(false);
+    }
+  }
+
+  return (
+    <Layout title="Client-Verwaltung">
+      <div className="grid grid--dense">
+        <Card title="Registrierte Clients" tag={`${clients.length} EINTRÄGE`}>
+          <div className="kv">
+            <span className="kv__label">Quelle</span>
+            <span className="kv__value kv__value--highlight">Router-Backend /clients</span>
+          </div>
+          <div className="kv">
+            <span className="kv__label">Persistenz</span>
+            <span className="kv__value">SQLite `router/data/pi_guardian.db`</span>
+          </div>
+          <div className="kv">
+            <span className="kv__label">Kids Controller sichtbar</span>
+            <span className="kv__value">
+              {sortedClients.some((client) => client.name === 'Kids_Controller') ? 'Ja' : 'Nein'}
+            </span>
+          </div>
+        </Card>
+
+        <Card title="Hinweise" tag="ECHTE DATEN">
+          <div className="kv">
+            <span className="kv__label">Lesen</span>
+            <span className="kv__value">GET /clients</span>
+          </div>
+          <div className="kv">
+            <span className="kv__label">Anlegen</span>
+            <span className="kv__value">POST /clients</span>
+          </div>
+          <div className="kv">
+            <span className="kv__label">Aktualisieren</span>
+            <span className="kv__value">PUT /clients/{'{id}'}</span>
+          </div>
+          <div className="kv">
+            <span className="kv__label">Löschen</span>
+            <span className="kv__value">DELETE /clients/{'{id}'}</span>
+          </div>
+        </Card>
+      </div>
+
+      {error && (
+        <div className="alert alert--error" style={{ marginBottom: '1rem' }}>
+          {error}
+        </div>
+      )}
+
+      {notice && (
+        <div className="alert alert--ok" style={{ marginBottom: '1rem' }}>
+          {notice}
+        </div>
+      )}
+
+      {createdApiKey && (
+        <div className="alert alert--warn" style={{ marginBottom: '1rem' }}>
+          Neuer API-Key wurde erzeugt und nur jetzt angezeigt:
+          <div className="code-block" style={{ marginTop: '0.5rem' }}>
+            {createdApiKey}
+          </div>
+        </div>
+      )}
+
+      <Card title="Persistente Clients" tag={loading ? 'Lädt…' : 'LIVE'}>
+        {loading ? (
+          <div className="text--muted">Lade Clients aus dem Router-Backend …</div>
+        ) : (
+          <div className="table-wrap">
+            <table className="table">
+              <thead>
+                <tr>
+                  <th>ID</th>
+                  <th>Name</th>
+                  <th>Beschreibung</th>
+                  <th>IP / Host</th>
+                  <th>Routen</th>
+                  <th>Status</th>
+                  <th>Aktionen</th>
+                </tr>
+              </thead>
+              <tbody>
+                {sortedClients.map((client) => (
+                  <tr key={client.id}>
+                    <td><code>{client.id}</code></td>
+                    <td>
+                      <strong>{client.name}</strong>
+                      {client.name === 'Kids_Controller' && (
+                        <div className="text--muted" style={{ marginTop: '0.2rem' }}>
+                          Persistenter externen Client für den Kids-Controller
+                        </div>
+                      )}
+                    </td>
+                    <td className="text--muted">{client.description || '—'}</td>
+                    <td><code>{client.allowed_ip}</code></td>
+                    <td><code>{routesToText(client.allowed_routes ?? [])}</code></td>
+                    <td>
+                      {client.active ? (
+                        <span className="badge badge--ok"><span className="badge__dot" />Aktiv</span>
+                      ) : (
+                        <span className="badge badge--fail"><span className="badge__dot" />Inaktiv</span>
+                      )}
+                    </td>
+                    <td>
+                      <div className="btn-group">
+                        <button
+                          className="btn btn--sm btn--ghost"
+                          onClick={() => startEdit(client)}
+                          disabled={saving}
+                        >
+                          Bearbeiten
+                        </button>
+                        <button
+                          className="btn btn--sm btn--ghost"
+                          onClick={() => handleToggleActive(client)}
+                          disabled={saving}
+                        >
+                          {client.active ? 'Deaktivieren' : 'Aktivieren'}
+                        </button>
+                        <button
+                          className="btn btn--sm btn--danger"
+                          onClick={() => handleDelete(client)}
+                          disabled={saving}
+                        >
+                          Löschen
+                        </button>
+                      </div>
+                    </td>
+                  </tr>
+                ))}
+                {sortedClients.length === 0 && (
+                  <tr>
+                    <td colSpan={7} className="text--muted" style={{ textAlign: 'center' }}>
+                      Keine Clients registriert.
+                    </td>
+                  </tr>
+                )}
+              </tbody>
+            </table>
+          </div>
+        )}
+      </Card>
+
+      <Card
+        title={editingId === null ? 'Client anlegen' : `Client bearbeiten: ${form.name || editingId}`}
+        tag={editingId === null ? 'NEU' : 'EDIT'}
+      >
+        <div className="grid grid--2">
+          <div className="form-group">
+            <label className="form-label">Name</label>
+            <input
+              className="form-input"
+              value={form.name}
+              onChange={(e) => setForm({ ...form, name: e.target.value })}
+              placeholder="z.B. Werkstatt-Terminal"
+            />
+          </div>
+          <div className="form-group">
+            <label className="form-label">Erlaubte IP / Subnetz</label>
+            <input
+              className="form-input"
+              value={form.allowed_ip}
+              onChange={(e) => setForm({ ...form, allowed_ip: e.target.value })}
+              placeholder="z.B. 192.168.50.0/24"
+            />
+          </div>
+        </div>
+
+        <div className="form-group">
+          <label className="form-label">Beschreibung</label>
+          <textarea
+            className="form-input form-input--textarea"
+            value={form.description}
+            onChange={(e) => setForm({ ...form, description: e.target.value })}
+            placeholder="Wofür wird dieser Client genutzt?"
+          />
+        </div>
+
+        <div className="form-group">
+          <label className="form-label">Erlaubte Routen (kommasepariert)</label>
+          <textarea
+            className="form-input form-input--textarea"
+            value={form.allowed_routes_text}
+            onChange={(e) => setForm({ ...form, allowed_routes_text: e.target.value })}
+            placeholder="/route, /health, /clients"
+          />
+        </div>
+
+        <div className="toggle-row" style={{ marginBottom: '1rem' }}>
+          <button
+            className={`btn btn--sm ${form.active ? 'btn--active' : 'btn--ghost'}`}
+            onClick={() => setForm({ ...form, active: true })}
+            type="button"
+          >
+            Aktiv
+          </button>
+          <button
+            className={`btn btn--sm ${!form.active ? 'btn--active' : 'btn--ghost'}`}
+            onClick={() => setForm({ ...form, active: false })}
+            type="button"
+          >
+            Inaktiv
+          </button>
+        </div>
+
+        <div className="btn-group">
+          <button className="btn" onClick={handleSubmit} disabled={saving}>
+            {editingId === null ? 'Client speichern' : 'Änderungen speichern'}
+          </button>
+          <button className="btn btn--ghost" onClick={startCreate} disabled={saving}>
+            Neuer Client
+          </button>
+          {editingId !== null && (
+            <button className="btn btn--ghost" onClick={resetForm} disabled={saving}>
+              Bearbeitung abbrechen
+            </button>
+          )}
+        </div>
+      </Card>
+    </Layout>
+  );
+}

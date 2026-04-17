@@ -1,0 +1,82 @@
+import asyncio
+
+from app.main import _extract_text_content, _prompt_from_chat_payload
+from app.router.classifier import select_model_for_prompt
+from app.main import _proxy_to_ollama
+from app.router.settings_reader import get_settings
+
+
+def _collect_stream_body(response) -> list[bytes]:
+    async def collect() -> list[bytes]:
+        chunks: list[bytes] = []
+        async for chunk in response.body_iterator:
+            chunks.append(chunk)
+        return chunks
+
+    return asyncio.run(collect())
+
+
+def test_select_model_for_prompt_uses_large_model_for_complex_keywords():
+    model = select_model_for_prompt("Bitte architektur analysieren und debuggen")
+    assert model
+
+
+def test_extract_text_content_handles_string_and_part_list():
+    assert _extract_text_content("Hallo") == "Hallo"
+    assert _extract_text_content(
+        [
+            {"type": "text", "text": "Teil 1"},
+            {"type": "image", "image_url": "x"},
+            {"type": "text", "text": "Teil 2"},
+        ]
+    ) == "Teil 1\nTeil 2"
+
+
+def test_prompt_from_chat_payload_prefers_user_messages():
+    payload = {
+        "messages": [
+            {"role": "system", "content": "System"},
+            {"role": "user", "content": "Erste Frage"},
+            {"role": "assistant", "content": "Antwort"},
+            {"role": "user", "content": [{"type": "text", "text": "Zweite Frage"}]},
+        ]
+    }
+    assert _prompt_from_chat_payload(payload) == "Erste Frage\nZweite Frage"
+
+
+def test_get_settings_exposes_large_model():
+    settings = get_settings()
+    assert settings["large_model"]
+
+
+def test_proxy_to_ollama_stream_logs_history(monkeypatch):
+    history_calls: list[dict] = []
+
+    async def fake_stream_to_ollama(path, payload, request_id, model):
+        yield b'{"response":"ok"}\n'
+
+    def fake_select_model_for_prompt(prompt: str) -> str:
+        return "test-model"
+
+    def fake_create_route_history_entry(session, **kwargs):
+        history_calls.append(kwargs)
+
+    monkeypatch.setattr("app.main.stream_to_ollama", fake_stream_to_ollama)
+    monkeypatch.setattr("app.main.select_model_for_prompt", fake_select_model_for_prompt)
+    monkeypatch.setattr("app.main.create_route_history_entry", fake_create_route_history_entry)
+
+    response = asyncio.run(
+        _proxy_to_ollama(
+            "/api/generate",
+            {"prompt": "Hallo", "stream": True},
+            "Hallo",
+            session=object(),
+            client_name="client-a",
+        )
+    )
+
+    assert _collect_stream_body(response) == [b'{"response":"ok"}\n']
+    assert len(history_calls) == 1
+    assert history_calls[0]["success"] is True
+    assert history_calls[0]["model"] == "test-model"
+    assert history_calls[0]["client_name"] == "client-a"
