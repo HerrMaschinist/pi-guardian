@@ -17,12 +17,39 @@ export interface RouteResponse {
   done: boolean;
   done_reason?: string | null;
   duration_ms: number;
+  decision_classification?: 'llm_only' | 'tool_required' | 'internet_required' | 'blocked';
+  decision_reasons?: string[];
+  decision_tool_hints?: string[];
+  decision_internet_hints?: string[];
   fairness_review_attempted?: boolean;
   fairness_review_used?: boolean;
   fairness_risk?: string;
   fairness_review_override?: boolean;
   fairness_reasons?: string[];
   fairness_notes?: string[];
+  execution_mode?: 'llm' | 'tool' | 'internet_pending';
+  policy_trace?: RoutePolicyTrace | null;
+  tool_executions?: RouteToolExecution[];
+  execution_error?: string | null;
+}
+
+export interface RoutePolicyTrace {
+  can_use_llm: boolean;
+  can_use_tools: boolean;
+  can_use_internet: boolean;
+  decision_classification: 'llm_only' | 'tool_required' | 'internet_required' | 'blocked';
+  tool_execution_allowed: boolean;
+  internet_execution_allowed: boolean;
+}
+
+export interface RouteToolExecution {
+  tool_name: string;
+  arguments: Record<string, unknown>;
+  reason: string;
+  success: boolean;
+  duration_ms: number;
+  output?: unknown;
+  error?: string | null;
 }
 
 // === Geplante API-Typen (BACKEND ERFORDERLICH) ===
@@ -89,6 +116,9 @@ export interface ClientEntry {
   active: boolean;
   allowed_ip: string;
   allowed_routes: string[];
+  can_use_llm?: boolean;
+  can_use_tools?: boolean;
+  can_use_internet?: boolean;
   api_key?: string;
   enabled?: boolean;
   created_at?: string;
@@ -209,6 +239,10 @@ export interface RouteHistoryEntry {
   error_code?: string | null;
   client_name?: string | null;
   duration_ms?: number | null;
+  decision_classification?: 'llm_only' | 'tool_required' | 'internet_required' | 'blocked';
+  decision_reasons?: string[];
+  decision_tool_hints?: string[];
+  decision_internet_hints?: string[];
   fairness_review_attempted?: boolean;
   fairness_review_used?: boolean;
   fairness_risk?: string;
@@ -216,6 +250,12 @@ export interface RouteHistoryEntry {
   escalation_threshold?: string | null;
   fairness_reasons?: string[];
   fairness_notes?: string[];
+  policy_trace?: Record<string, unknown>;
+  execution_mode?: 'llm' | 'tool' | 'internet_pending';
+  execution_status?: 'not_executed' | 'succeeded' | 'failed';
+  executed_tools?: string[];
+  tool_execution_records?: Record<string, unknown>[];
+  execution_error?: string | null;
   created_at: string;
   [key: string]: unknown;
 }

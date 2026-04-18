@@ -29,6 +29,9 @@ def ensure_admin_client(session: Session) -> Client:
             allowed_ip=settings.ADMIN_ALLOWED_IP,
             allowed_routes=_allowed_routes(),
             api_key=generate_api_key(),
+            can_use_llm=True,
+            can_use_tools=True,
+            can_use_internet=True,
         )
         session.add(client)
         session.commit()
@@ -49,6 +52,15 @@ def ensure_admin_client(session: Session) -> Client:
         changed = True
     if not client.active:
         client.active = True
+        changed = True
+    if not client.can_use_llm:
+        client.can_use_llm = True
+        changed = True
+    if not client.can_use_tools:
+        client.can_use_tools = True
+        changed = True
+    if not client.can_use_internet:
+        client.can_use_internet = True
         changed = True
     if changed:
         session.add(client)

@@ -36,6 +36,9 @@ def _to_read(client: Client, include_key: bool = False) -> ClientRead:
         active=client.active,
         allowed_ip=client.allowed_ip,
         allowed_routes=client.allowed_routes_list(),
+        can_use_llm=bool(client.can_use_llm),
+        can_use_tools=bool(client.can_use_tools),
+        can_use_internet=bool(client.can_use_internet),
         api_key=client.api_key if include_key else "",
         created_at=client.created_at,
     )
@@ -65,6 +68,9 @@ async def create_client(
             allowed_ip=data.allowed_ip,
             allowed_routes=",".join(r.strip() for r in data.allowed_routes if r.strip()),
             api_key=generate_api_key(),
+            can_use_llm=data.can_use_llm,
+            can_use_tools=data.can_use_tools,
+            can_use_internet=data.can_use_internet,
         )
         session.add(client)
         session.commit()

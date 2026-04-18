@@ -258,6 +258,76 @@ Date: 2026-04-17
   - `router/app/router/model_registry.py`
   - `router/tests/test_model_registry.py`
 - Änderungen:
+
+## Phase 1-5: Kontrollierte `/route`-Tool-Ausführung und Audit-Produktkern
+- Ausgangslage:
+  - Der Router konnte `tool_required` und `internet_required` zwar klassifizieren, aber der normale `/route`-Pfad ignorierte diese Entscheidung operativ.
+  - Echte Tool-Ausführung existierte nur im Agenten-System.
+  - Audit zeigte die Entscheidung, aber nicht den tatsächlichen Ausführungspfad.
+- Analyse:
+  - Das vorhandene Agent-Tool-System (`app/tools/*`, `ToolExecutor`) war bereits technisch belastbar genug, um wiederverwendet zu werden.
+  - Für den normalen `/route`-Pfad war kein zweites Tool-System nötig, sondern ein kleiner Route-Execution-Layer.
+  - Als erste belastbare Kandidaten für reale Ausführung eignen sich `system_status` und `service_status`.
+- Betroffene Dateien:
+  - `router/app/router/execution/__init__.py`
+  - `router/app/router/execution/models.py`
+  - `router/app/router/execution/service.py`
+  - `router/app/router/service.py`
+  - `router/app/router/history.py`
+  - `router/app/models/route_history.py`
+  - `router/app/database.py`
+  - `router/app/schemas/response_models.py`
+  - `router/app/main.py`
+  - `router/tests/test_route_execution.py`
+  - `ui/src/types/index.ts`
+  - `ui/src/pages/Dashboard.tsx`
+  - `ui/src/pages/Diagnostics.tsx`
+  - `ui/src/pages/History.tsx`
+  - `ui/src/styles.css`
+  - `TOOL_ROUTING_EXECUTION_2026-04-17.md`
+  - `PRODUCTIZATION_PREP_2026-04-17.md`
+  - `UI_DIRECTION_REWORK_2026-04-17.md`
+- Änderungen:
+  - Neuer Route-Execution-Layer für den normalen `/route`-Pfad eingeführt.
+  - `tool_required` führt jetzt für ausgewählte read-only Tools echte kontrollierte Ausführung aus.
+  - Verdrahtete Route-Tools in dieser Phase:
+    - `system_status`
+    - `service_status`
+  - `internet_required` endet jetzt kontrolliert mit `internet_execution_unavailable` statt still im Modellpfad zu landen.
+  - Route-Audit speichert jetzt Policy-Trace, Execution-Mode, Tool-Liste und strukturierte Tool-Resultate.
+  - `RouteResponse` liefert jetzt neben Textantwort auch:
+    - `execution_mode`
+    - `policy_trace`
+    - `tool_executions`
+    - `execution_error`
+  - Diagnose-, Dashboard- und History-UI zeigen jetzt die neue Execution-/Audit-Sicht explizit an.
+- Warum nötig:
+  - Ohne reale Tool-Ausführung blieb `tool_required` ein rein deklarativer Vertrag.
+  - Ohne sichtbare Policy-/Execution-Daten blieb Audit zu grob für einen produktionsgerichteten Kern.
+  - Eine kleine, saubere Verdrahtung ist belastbarer als ein halb fertiger Multi-Tool-Agentenpfad im normalen Router.
+- Tests:
+  - Python-Kompilierung der geänderten Kernmodule erfolgreich.
+  - Gezielt betroffene Backend-Tests erfolgreich:
+    - `test_route_execution.py`
+    - `test_client_policy.py`
+    - `test_decision_layer.py`
+    - `test_tools.py`
+    - zusammen `14 passed`
+  - Frontend-Build erfolgreich:
+    - `npm run build`
+  - Vollständige Router-Gesamtsuite gesammelt und gestartet; sie hängt aktuell in einem bereits weiter entfernten Agent-Policy-Testpfad nach den ersten 11 erfolgreichen Tests und wurde deshalb nicht als Abschlusskriterium verwendet.
+- Produktionsreife-Vorbereitung:
+  - Reuse der bestehenden Tool-Laufzeit statt duplizierter Ausführung.
+  - Saubere Trennung zwischen Decision, Policy, Route-Execution und Tool-Layer.
+  - Internet-Pfad bewusst als kontrolliert aufgeschobene Schicht markiert.
+- UI-Richtungsentscheidungen:
+  - Diagnose wird als `Route Console` statt bloßer Prompt-Test dargestellt.
+  - History wird als `Execution History` mit Lane-/Tool-Sicht geführt.
+  - Dashboard zeigt Execution-Lanes und offene Architekturgrenzen statt generischer AI-Feature-Liste.
+- Offene Punkte:
+  - Route-Tooling ist absichtlich auf zwei stabile read-only Tools begrenzt.
+  - Granulare Client-Policies pro Tool gibt es noch nicht.
+  - Ein echter Web-/Internet-Executor ist bewusst nicht implementiert.
   - `_upsert_role_entry()` entfernt.
   - Neue Logik `_ensure_model_record()` sorgt nur noch dafür, dass gewünschte Modellnamen als Datensätze existieren.
   - `sync_model_registry()` berechnet den Zielzustand jetzt über Modellnamen:
@@ -294,3 +364,165 @@ Date: 2026-04-17
 - Offener Reststatus:
   - Kein offener Datenbankfehler mehr.
   - Ein direkter `GET /models/registry` mit dem aktuell verwendeten Header-Key lief als `403`, weil dieser Client für diese Route nicht freigeschaltet ist; der eigentliche Rollenfix ist davon unabhängig und über Datenbank- und Settings-Wechsel sauber verifiziert.
+
+## Produktarchitektur Phase 1: Soll-Architektur v1 für den Router
+- Ausgangslage:
+  - Der Router läuft funktional stabil mit Auth, Clients, Modellregistry, Modell-Pulls, Agenten-Aktivität und echter UI-Anbindung.
+  - Die zentrale Request-Verarbeitung war aber weiterhin primär auf Modellwahl plus Ollama-Ausführung ausgerichtet.
+- Analyse:
+  - `/home/alex/pi-guardian/router/app/main.py` nimmt Requests über `/route` entgegen und delegiert nach Auth direkt an `/home/alex/pi-guardian/router/app/router/service.py`.
+  - `route_prompt(...)` kombiniert heute Modellwahl, Fairness-Prüfung, Ollama-Ausführung und Audit in einem linearen Ablauf.
+  - `/home/alex/pi-guardian/router/app/router/classifier.py` ist bisher nur ein Modellwähler, kein eigentlicher Entscheidungs-Layer.
+  - Das Tool-System ist bereits gekapselt vorhanden (`tools/registry.py`, `tools/executor.py`), wird aber im normalen `/route`-Pfad noch nicht als Routing-Baustein genutzt.
+  - Client-Verwaltung und Route-Auth sind bereits sauberer getrennt als die eigentliche Request-Entscheidung.
+- Ursache:
+  - Es fehlt eine explizite Entscheidungsschicht zwischen HTTP-Eingang und Ausführung.
+  - Dadurch ist nicht sauber unterscheidbar zwischen:
+    - reine LLM-Anfrage
+    - Tool-Bedarf
+    - Web-/Internet-Bedarf
+    - Block/Reject
+- Betroffene Dateien:
+  - `/home/alex/pi-guardian/router/app/main.py`
+  - `/home/alex/pi-guardian/router/app/router/service.py`
+  - `/home/alex/pi-guardian/router/app/router/classifier.py`
+  - `/home/alex/pi-guardian/router/app/router/fairness.py`
+  - `/home/alex/pi-guardian/router/app/tools/registry.py`
+  - `/home/alex/pi-guardian/router/app/tools/executor.py`
+- Änderungen:
+  - Neue Architektur-Dokumentation erstellt:
+    - `/home/alex/pi-guardian/ROUTER_PRODUCT_ARCHITECTURE_V1_2026-04-17.md`
+  - Dort festgelegt:
+    - eigener Decision-Layer unter `router/app/router/decision/`
+    - saubere Trennung von Entscheidung, Tool-Routing, Web-Layer und Ausführung
+    - vorbereitende Produktisierungsentscheidungen für spätere stärkere Produktarchitektur
+- Warum nötig:
+  - Die nächste Ausbaustufe soll keine weitere Logik in `main.py` oder lose Hilfsfunktionen kleben.
+  - Eine klare Entscheidungsschicht ist die kleinste sinnvolle Erweiterung, die zugleich auf spätere Produktisierung einzahlt.
+- Testergebnisse:
+  - Phase 1 war eine Analyse- und Architekturphase; keine Laufzeitfunktion wurde verändert.
+  - Bestehender Ist-Zustand blieb unverändert.
+- Offener Reststatus:
+  - Die Soll-Architektur ist definiert.
+  - Nächster Schritt ist die minimale erste Ausbaustufe:
+    - Decision-Layer mit Klassifikation `llm_only`, `tool_required`, `internet_required`, `blocked`
+    - Tool-Routing-Grundgerüst
+
+## Produkt-Ausbaustufe Phase 2: Decision-Layer vor dem Modell
+- Ausgangslage:
+  - Der Router hat Requests bisher nach Auth direkt in `route_prompt(...)` verarbeitet.
+  - Die vorhandene Klassifikation war nur eine Modellwahl-Heuristik.
+- Analyse:
+  - Es gab keine eigene interne Repräsentation für die Frage, ob eine Anfrage:
+    - reine LLM-Verarbeitung braucht
+    - Tool-Bedarf hat
+    - Web-/Internet-Bedarf hat
+    - sofort blockiert werden muss
+  - Tool-System und History waren bereits vorhanden, aber nicht über eine vorgelagerte Entscheidung verbunden.
+- Ursache:
+  - Der Router hatte noch keine eigenständige Domänenschicht für Request-Entscheidungen.
+  - Dadurch war Routing-Verhalten schwer erweiterbar und produktarchitektonisch zu nahe an der Route-/Service-Implementierung.
+- Betroffene Dateien:
+  - `/home/alex/pi-guardian/router/app/router/service.py`
+  - `/home/alex/pi-guardian/router/app/router/decision/models.py`
+  - `/home/alex/pi-guardian/router/app/router/decision/classifier.py`
+  - `/home/alex/pi-guardian/router/app/router/decision/service.py`
+  - `/home/alex/pi-guardian/router/app/router/history.py`
+  - `/home/alex/pi-guardian/router/app/models/route_history.py`
+  - `/home/alex/pi-guardian/router/app/database.py`
+  - `/home/alex/pi-guardian/router/app/main.py`
+  - `/home/alex/pi-guardian/router/app/schemas/response_models.py`
+  - `/home/alex/pi-guardian/ui/src/types/index.ts`
+  - `/home/alex/pi-guardian/router/tests/test_decision_layer.py`
+  - `/home/alex/pi-guardian/router/tests/test_fairness.py`
+- Änderungen:
+  - Neuen Decision-Layer unter `router/app/router/decision/` eingeführt.
+  - Interne Klassifikation ergänzt:
+    - `llm_only`
+    - `tool_required`
+    - `internet_required`
+    - `blocked`
+  - `route_prompt(...)` entscheidet jetzt zuerst, bevor Fairness und Modellaufruf starten.
+  - Geblockte Requests werden vor dem Modell mit `request_blocked` abgewiesen.
+  - `routehistory` speichert jetzt zusätzlich:
+    - `decision_classification`
+    - `decision_reasons`
+    - `decision_tool_hints`
+    - `decision_internet_hints`
+  - API-Response von `/route` liefert diese Entscheidungsmetadaten ebenfalls zurück.
+- Warum nötig:
+  - Diese Schicht trennt erstmals klar zwischen Entscheidungslogik und Ausführung.
+  - Sie schafft die produktfähige Grundlage für spätere Tool-, Web- und Policy-Erweiterungen, ohne neue Logik in `main.py` zu kleben.
+- Testergebnisse:
+  - Router-Tests erfolgreich:
+    - `tests/test_decision_layer.py`
+    - `tests/test_fairness.py`
+    - `tests/test_auth.py`
+    - Ergebnis: `10 passed`
+  - Frontend-Build erfolgreich: `npm run build`
+  - Live-Verifikation:
+    - `sudo systemctl restart pi-guardian-router.service` erfolgreich
+    - `sudo systemctl status pi-guardian-router.service --no-pager -l` zeigt `active (running)`
+    - `/route` mit normaler Anfrage liefert jetzt:
+      - `decision_classification=llm_only`
+      - `decision_reasons`
+    - `/route` mit eindeutig geblockter Anfrage liefert `403` und `request_blocked`
+    - `routehistory` speichert die neuen Entscheidungsfelder in der SQLite-Datenbank
+- Offener Reststatus:
+  - `tool_required` und `internet_required` sind in dieser Stufe bewusst noch Entscheidungs- und Audit-Signale, kein vollständiges autonomes Tool- oder Web-Orchestrierungssystem.
+
+## Produkt-Ausbaustufe Phase 3: Client-Rechte und Policy-Grundlage
+- Ausgangslage:
+  - Die Client-Verwaltung kannte bisher nur Routen, API-Key, IP und Aktiv/Inaktiv.
+  - Ob ein Client LLM-only, Tool- oder Internetbedarf inhaltlich auslösen darf, war nicht modelliert.
+- Analyse:
+  - Eine reine Route-Freigabe reicht für spätere Produktisierung nicht aus.
+  - Für belastbare Policies braucht der Router Rechte auf Nutzungs-/Fähigkeitsebene.
+- Ursache:
+  - Es fehlte eine Policy-Grundlage zwischen Auth und Decision-Layer.
+- Betroffene Dateien:
+  - `/home/alex/pi-guardian/router/app/models/client.py`
+  - `/home/alex/pi-guardian/router/app/database.py`
+  - `/home/alex/pi-guardian/router/app/router/policy.py`
+  - `/home/alex/pi-guardian/router/app/router/auth.py`
+  - `/home/alex/pi-guardian/router/app/router/service.py`
+  - `/home/alex/pi-guardian/router/app/router/clients.py`
+  - `/home/alex/pi-guardian/router/app/router/admin_client.py`
+  - `/home/alex/pi-guardian/ui/src/types/index.ts`
+  - `/home/alex/pi-guardian/ui/src/pages/Clients.tsx`
+  - `/home/alex/pi-guardian/ui/src/styles.css`
+  - `/home/alex/pi-guardian/router/tests/test_client_policy.py`
+- Änderungen:
+  - Client-Modell um Fähigkeiten erweitert:
+    - `can_use_llm`
+    - `can_use_tools`
+    - `can_use_internet`
+  - Datenbank-Bootstrap ergänzt fehlende Client-Spalten automatisch.
+  - Neue Policy-Schicht eingeführt:
+    - `router/app/router/policy.py`
+  - `authorize_route_context(...)` liefert jetzt einen strukturierten Client-Kontext für `/route`.
+  - Der Decision-Layer wird vor der Ausführung zusätzlich gegen die Client-Policy geprüft.
+  - Der persistente Admin-Client wird beim Bootstrap bewusst mit allen Fähigkeiten versehen.
+  - Die echte Client-Verwaltung in der UI kann die neuen Fähigkeiten anzeigen und bearbeiten.
+- Warum nötig:
+  - Damit Rechte nicht später als lose Sonderfälle in einzelnen Endpunkten landen.
+  - Die Kombination aus Route-Auth und inhaltlicher Policy ist deutlich näher an einer produktfähigen Architektur als reine Key-/Route-Prüfung.
+- Testergebnisse:
+  - Router-Tests erfolgreich:
+    - `tests/test_decision_layer.py`
+    - `tests/test_fairness.py`
+    - `tests/test_client_policy.py`
+    - `tests/test_clients.py`
+    - `tests/test_auth.py`
+    - Ergebnis: `15 passed`
+  - Frontend-Build erfolgreich: `npm run build`
+  - Live-Verifikation:
+    - `sudo systemctl restart pi-guardian-router.service` erfolgreich
+    - `sudo systemctl status pi-guardian-router.service --no-pager -l` zeigt `active (running)`
+    - Client-Tabelle enthält jetzt Capability-Spalten
+    - Persistenter Admin-Client (`Router_Admin_UI_Persistent`) wurde beim Start auf `can_use_llm=1`, `can_use_tools=1`, `can_use_internet=1` aktualisiert
+    - Normale LLM-Anfrage über `/route` funktioniert weiter
+    - Toolartige Anfrage über `/route` wird für einen nicht freigeschalteten Client jetzt mit `403` geblockt
+- Offener Reststatus:
+  - Es gibt bewusst noch keine komplexe Policy-Matrix pro Tool, Risikostufe oder Kategorie.
+  - Internetzugriff bleibt weiterhin nur vorbereitet, nicht voll produktiv freigeschaltet.

@@ -67,8 +67,7 @@ export function Dashboard({ connectionState, lastCheck, healthError, onRefresh }
   return (
     <Layout title="Systemübersicht">
       <div className="grid grid--dense">
-        {/* SOFORT NUTZBAR */}
-        <Card title="Router-Status" tag="LIVE">
+        <Card title="Router-Kanal" tag="CONTROL">
           <div className="kv">
             <span className="kv__label">Backend</span>
             <StatusBadge state={connectionState} />
@@ -97,8 +96,7 @@ export function Dashboard({ connectionState, lastCheck, healthError, onRefresh }
           </button>
         </Card>
 
-        {/* SOFORT NUTZBAR */}
-        <Card title="Modellkonfiguration" tag="LIVE">
+        <Card title="Model Lane" tag="EXEC">
           <div className="kv">
             <span className="kv__label">Fast Model</span>
             <code className="kv__value kv__value--highlight">
@@ -117,8 +115,7 @@ export function Dashboard({ connectionState, lastCheck, healthError, onRefresh }
           </p>
         </Card>
 
-        {/* BACKEND ERFORDERLICH: GET /status/service */}
-        <Card title="Dienststatus" tag="LIVE">
+        <Card title="Service Monitor" tag="OPS">
           <div className="kv">
             <span className="kv__label">systemd</span>
             <span className={`kv__value ${serviceStatus?.active ? 'text--ok' : 'text--fail'}`}>
@@ -154,26 +151,38 @@ export function Dashboard({ connectionState, lastCheck, healthError, onRefresh }
             </div>
           )}
         </Card>
+
+        <Card title="Execution Lanes" tag="ROUTING">
+          <div className="trace-list">
+            <div className="trace-list__row">
+              <span className="trace-list__label">`llm_only`</span>
+              <span className="trace-list__value">Direkt über Modellpfad mit Fairness-Prüfung</span>
+            </div>
+            <div className="trace-list__row">
+              <span className="trace-list__label">`tool_required`</span>
+              <span className="trace-list__value">Kontrollierte Read-Only-Tools im `/route`-Pfad</span>
+            </div>
+            <div className="trace-list__row">
+              <span className="trace-list__label">`internet_required`</span>
+              <span className="trace-list__value">Erkannt, aber bewusst noch nicht produktiv verdrahtet</span>
+            </div>
+          </div>
+        </Card>
       </div>
 
-      {/* Schnellaktionen */}
       <div className="grid grid--2 section">
-        <Card title="Schnelltest" tag="LIVE">
+        <Card title="Operator Console" tag="DIAG">
           <p className="text--sm">
-            Über „Diagnose" kannst du direkt einen Prompt an den Router senden
-            und die Antwort prüfen.
+            Die Diagnose-Seite zeigt jetzt nicht nur Prompt und Antwort, sondern auch
+            Decision-Klassifikation, Policy-Trace und tatsächliche Tool-Ausführung.
           </p>
         </Card>
 
-        <Card title="Backend-Lücken (Phase 1)" tag="INFO">
+        <Card title="Bewusst offen" tag="PENDING">
           <ul className="gap-list">
-            <li><code>GET /status/service</code> – Dienststatus</li>
-            <li><code>GET /models</code> – Modellliste</li>
-            <li><code>POST /models/select</code> – Modellwechsel</li>
-            <li><code>GET /settings</code> – Konfiguration lesen</li>
-            <li><code>PUT /settings</code> – Konfiguration ändern</li>
-            <li><code>GET /logs</code> – Log-Einträge</li>
-            <li><code>GET /clients</code> – Client-Verwaltung</li>
+            <li><code>internet_required</code> bleibt vorerst ein kontrollierter Stop statt Blindzugriff</li>
+            <li>Normale `/route`-Tool-Ausführung ist bewusst klein gehalten und nicht agentisch</li>
+            <li>UI bleibt Systemkonsole, kein generisches AI-Prompt-Dashboard</li>
           </ul>
         </Card>
       </div>

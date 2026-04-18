@@ -92,13 +92,15 @@ export function History() {
       )}
 
       <div className="section">
-        <Card title="Request History" tag="API">
+        <Card title="Execution History" tag="AUDIT">
           <div className="table-wrap">
             <table className="table">
               <thead>
                 <tr>
                   <th>Zeit</th>
                   <th>Anfrage</th>
+                  <th>Lane</th>
+                  <th>Tools</th>
                   <th>Client</th>
                   <th>Fehler</th>
                   <th>Modell</th>
@@ -116,6 +118,15 @@ export function History() {
                         {entry.fairness_risk ? ` · ${entry.fairness_risk}` : ''}
                       </div>
                     </td>
+                    <td>
+                      <strong>{entry.decision_classification ?? '–'}</strong>
+                      <div className="text--muted text--sm">{entry.execution_mode ?? 'llm'}</div>
+                    </td>
+                    <td>
+                      {(entry.executed_tools && entry.executed_tools.length > 0)
+                        ? entry.executed_tools.join(', ')
+                        : '–'}
+                    </td>
                     <td>{pickValue(entry, ['client_name'])}</td>
                     <td>{pickValue(entry, ['error_code'])}</td>
                     <td>{pickValue(entry, ['model'])}</td>
@@ -124,7 +135,7 @@ export function History() {
                 ))}
                 {entries.length === 0 && !loading && (
                   <tr>
-                    <td colSpan={6} className="text--muted" style={{ textAlign: 'center' }}>
+                    <td colSpan={8} className="text--muted" style={{ textAlign: 'center' }}>
                       Keine Verlaufsdaten vorhanden oder Zugriff verweigert.
                     </td>
                   </tr>

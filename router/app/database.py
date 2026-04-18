@@ -32,6 +32,7 @@ engine = create_engine(
 def init_db() -> None:
     """Erstellt alle Tabellen beim App-Start (kein Alembic)."""
     SQLModel.metadata.create_all(engine)
+    _ensure_client_columns()
     _ensure_route_history_columns()
     _bootstrap_reference_data()
     _bootstrap_admin_client()
@@ -50,6 +51,16 @@ def _ensure_route_history_columns() -> None:
         "fairness_threshold": "ALTER TABLE routehistory ADD COLUMN fairness_threshold VARCHAR",
         "fairness_reasons": "ALTER TABLE routehistory ADD COLUMN fairness_reasons VARCHAR NOT NULL DEFAULT '[]'",
         "fairness_notes": "ALTER TABLE routehistory ADD COLUMN fairness_notes VARCHAR NOT NULL DEFAULT '[]'",
+        "decision_classification": "ALTER TABLE routehistory ADD COLUMN decision_classification VARCHAR NOT NULL DEFAULT 'llm_only'",
+        "decision_reasons": "ALTER TABLE routehistory ADD COLUMN decision_reasons VARCHAR NOT NULL DEFAULT '[]'",
+        "decision_tool_hints": "ALTER TABLE routehistory ADD COLUMN decision_tool_hints VARCHAR NOT NULL DEFAULT '[]'",
+        "decision_internet_hints": "ALTER TABLE routehistory ADD COLUMN decision_internet_hints VARCHAR NOT NULL DEFAULT '[]'",
+        "policy_trace": "ALTER TABLE routehistory ADD COLUMN policy_trace VARCHAR NOT NULL DEFAULT '{}'",
+        "execution_mode": "ALTER TABLE routehistory ADD COLUMN execution_mode VARCHAR NOT NULL DEFAULT 'llm'",
+        "execution_status": "ALTER TABLE routehistory ADD COLUMN execution_status VARCHAR NOT NULL DEFAULT 'not_executed'",
+        "executed_tools": "ALTER TABLE routehistory ADD COLUMN executed_tools VARCHAR NOT NULL DEFAULT '[]'",
+        "tool_execution_records": "ALTER TABLE routehistory ADD COLUMN tool_execution_records VARCHAR NOT NULL DEFAULT '[]'",
+        "execution_error": "ALTER TABLE routehistory ADD COLUMN execution_error VARCHAR",
     }
 
     with engine.begin() as conn:
@@ -61,6 +72,24 @@ def _ensure_route_history_columns() -> None:
             if column_name not in existing:
                 conn.execute(text(ddl))
                 logger.info("Route-History-Spalte ergänzt: %s", column_name)
+
+
+def _ensure_client_columns() -> None:
+    expected_columns = {
+        "can_use_llm": "ALTER TABLE client ADD COLUMN can_use_llm BOOLEAN NOT NULL DEFAULT 1",
+        "can_use_tools": "ALTER TABLE client ADD COLUMN can_use_tools BOOLEAN NOT NULL DEFAULT 0",
+        "can_use_internet": "ALTER TABLE client ADD COLUMN can_use_internet BOOLEAN NOT NULL DEFAULT 0",
+    }
+
+    with engine.begin() as conn:
+        existing = {
+            row[1]
+            for row in conn.execute(text("PRAGMA table_info(client)")).fetchall()
+        }
+        for column_name, ddl in expected_columns.items():
+            if column_name not in existing:
+                conn.execute(text(ddl))
+                logger.info("Client-Spalte ergänzt: %s", column_name)
 
 
 def _bootstrap_reference_data() -> None:

@@ -1,10 +1,19 @@
 from ipaddress import ip_address, ip_network
+from dataclasses import dataclass
 
 from fastapi import HTTPException, Request
 from sqlmodel import Session, select
 
 from app.config import settings
 from app.models.client import Client
+from app.router.policy import ClientPolicyContext
+
+
+@dataclass(frozen=True)
+class AuthorizedClientContext:
+    client_id: int | None
+    name: str
+    policy: ClientPolicyContext
 
 
 def _extract_client_ip(request: Request) -> str:
@@ -56,6 +65,17 @@ def _authorize_request(
     session: Session,
     allowed_route: str,
 ) -> str | None:
+    client = _load_authorized_client(request, session, allowed_route)
+    if client is None:
+        return None
+    return client.name
+
+
+def _load_authorized_client(
+    request: Request,
+    session: Session,
+    allowed_route: str,
+) -> Client | None:
     if not settings.REQUIRE_API_KEY:
         return None
 
@@ -79,7 +99,25 @@ def _authorize_request(
     if client_ip != "unknown" and not _ip_allowed(client, client_ip):
         raise HTTPException(status_code=403, detail="Client-IP ist nicht erlaubt")
 
-    return client.name
+    return client
+
+
+def authorize_route_context(
+    request: Request,
+    session: Session,
+) -> AuthorizedClientContext | None:
+    client = _load_authorized_client(request, session, "/route")
+    if client is None:
+        return None
+    return AuthorizedClientContext(
+        client_id=client.id,
+        name=client.name,
+        policy=ClientPolicyContext(
+            can_use_llm=bool(client.can_use_llm),
+            can_use_tools=bool(client.can_use_tools),
+            can_use_internet=bool(client.can_use_internet),
+        ),
+    )
 
 
 def authorize_route_request(request: Request, session: Session) -> str | None:

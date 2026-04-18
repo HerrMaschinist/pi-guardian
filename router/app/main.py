@@ -43,7 +43,11 @@ from app.api.routes_memory import router as memory_router
 from app.api.routes_skills import router as skills_router
 from app.database import get_session, init_db
 from app.models.client import Client
-from app.router.auth import authorize_protected_request, authorize_route_request
+from app.router.auth import (
+    authorize_protected_request,
+    authorize_route_context,
+    authorize_route_request,
+)
 from app.router.classifier import select_model_for_prompt
 from app.router.clients import router as clients_router
 from app.router.errors import RouterApiError
@@ -144,6 +148,36 @@ def _parse_json_list(value) -> list[str]:
             return []
         if isinstance(parsed, list):
             return [item.strip() for item in parsed if isinstance(item, str) and item.strip()]
+    return []
+
+
+def _parse_json_dict(value) -> dict:
+    if not value:
+        return {}
+    if isinstance(value, dict):
+        return value
+    if isinstance(value, str):
+        try:
+            parsed = json.loads(value)
+        except json.JSONDecodeError:
+            return {}
+        if isinstance(parsed, dict):
+            return parsed
+    return {}
+
+
+def _parse_json_records(value) -> list[dict]:
+    if not value:
+        return []
+    if isinstance(value, list):
+        return [item for item in value if isinstance(item, dict)]
+    if isinstance(value, str):
+        try:
+            parsed = json.loads(value)
+        except json.JSONDecodeError:
+            return []
+        if isinstance(parsed, list):
+            return [item for item in parsed if isinstance(item, dict)]
     return []
 
 
@@ -371,6 +405,10 @@ async def history(
             error_code=entry.error_code,
             client_name=entry.client_name,
             duration_ms=entry.duration_ms,
+            decision_classification=entry.decision_classification or "llm_only",
+            decision_reasons=_parse_json_list(entry.decision_reasons),
+            decision_tool_hints=_parse_json_list(entry.decision_tool_hints),
+            decision_internet_hints=_parse_json_list(entry.decision_internet_hints),
             fairness_review_attempted=bool(entry.fairness_review_attempted),
             fairness_review_used=bool(entry.fairness_review_used),
             fairness_risk=entry.fairness_risk or "unknown",
@@ -378,6 +416,12 @@ async def history(
             escalation_threshold=entry.fairness_threshold,
             fairness_reasons=_parse_json_list(entry.fairness_reasons),
             fairness_notes=_parse_json_list(entry.fairness_notes),
+            policy_trace=_parse_json_dict(entry.policy_trace),
+            execution_mode=entry.execution_mode or "llm",
+            execution_status=entry.execution_status or "not_executed",
+            executed_tools=_parse_json_list(entry.executed_tools),
+            tool_execution_records=_parse_json_records(entry.tool_execution_records),
+            execution_error=entry.execution_error,
             created_at=entry.created_at.isoformat(),
         )
         for entry in list_route_history(session, limit=limit)
@@ -539,8 +583,8 @@ async def route(
     http_request: Request,
     session: Session = Depends(get_session),
 ) -> RouteResponse:
-    client_name = authorize_route_request(http_request, session)
-    return await route_prompt(request, session=session, client_name=client_name)
+    client_context = authorize_route_context(http_request, session)
+    return await route_prompt(request, session=session, client_context=client_context)
 
 
 @app.post(

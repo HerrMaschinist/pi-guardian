@@ -101,8 +101,7 @@ export function Diagnostics({ connectionState, onRefresh }: Props) {
   return (
     <Layout title="Test & Diagnose">
       <div className="grid grid--2">
-        {/* Health-Check */}
-        <Card title="Health-Check" tag="LIVE">
+        <Card title="Health Probe" tag="CONTROL">
           <p className="text--sm">Prüft GET /health auf dem Router.</p>
           <button
             className="btn"
@@ -133,8 +132,7 @@ export function Diagnostics({ connectionState, onRefresh }: Props) {
           )}
         </Card>
 
-        {/* Verbindungsübersicht */}
-        <Card title="Verbindungsstatus" tag="LIVE">
+        <Card title="Route Channel" tag="ROUTING">
           <div className="kv">
             <span className="kv__label">Ziel</span>
             <code className="kv__value">{routerAddress()}</code>
@@ -152,9 +150,8 @@ export function Diagnostics({ connectionState, onRefresh }: Props) {
         </Card>
       </div>
 
-      {/* Route-Test */}
       <div style={{ marginTop: '1.5rem' }}>
-        <Card title="Route-Test" tag="LIVE">
+        <Card title="Route Console" tag="EXEC">
           <div className="grid grid--2">
             <div className="form-group">
               <label className="form-label">Prompt</label>
@@ -201,21 +198,31 @@ export function Diagnostics({ connectionState, onRefresh }: Props) {
           {/* Response anzeigen */}
           {routeResult && (
             <div className="result-box" style={{ marginTop: '1rem' }}>
-              <div className="kv">
-                <span className="kv__label">Request</span>
-                <code className="kv__value">{routeResult.request_id}</code>
-              </div>
-              <div className="kv">
-                <span className="kv__label">Modell</span>
-                <code className="kv__value">{routeResult.model}</code>
-              </div>
-              <div className="kv">
-                <span className="kv__label">Fertig</span>
-                <span className="kv__value">{routeResult.done ? 'Ja' : 'Nein'}</span>
-              </div>
-              <div className="kv">
-                <span className="kv__label">Antwortzeit</span>
-                <span className="kv__value">{routeResult.duration_ms || routeTime} ms</span>
+              <div className="result-grid">
+                <div className="kv">
+                  <span className="kv__label">Request</span>
+                  <code className="kv__value">{routeResult.request_id}</code>
+                </div>
+                <div className="kv">
+                  <span className="kv__label">Execution Mode</span>
+                  <code className="kv__value">{routeResult.execution_mode ?? 'llm'}</code>
+                </div>
+                <div className="kv">
+                  <span className="kv__label">Modell</span>
+                  <code className="kv__value">{routeResult.model}</code>
+                </div>
+                <div className="kv">
+                  <span className="kv__label">Klassifikation</span>
+                  <code className="kv__value">{routeResult.decision_classification ?? '–'}</code>
+                </div>
+                <div className="kv">
+                  <span className="kv__label">Fertig</span>
+                  <span className="kv__value">{routeResult.done ? 'Ja' : 'Nein'}</span>
+                </div>
+                <div className="kv">
+                  <span className="kv__label">Antwortzeit</span>
+                  <span className="kv__value">{routeResult.duration_ms || routeTime} ms</span>
+                </div>
               </div>
               <div style={{ marginTop: '0.75rem' }}>
                 <label className="form-label">Response</label>
@@ -223,6 +230,63 @@ export function Diagnostics({ connectionState, onRefresh }: Props) {
                   {routeResult.response}
                 </pre>
               </div>
+              {routeResult.policy_trace && (
+                <div style={{ marginTop: '1rem' }}>
+                  <label className="form-label">Policy Trace</label>
+                  <div className="trace-list">
+                    <div className="trace-list__row">
+                      <span className="trace-list__label">LLM</span>
+                      <span className="trace-list__value">{routeResult.policy_trace.can_use_llm ? 'erlaubt' : 'gesperrt'}</span>
+                    </div>
+                    <div className="trace-list__row">
+                      <span className="trace-list__label">Tools</span>
+                      <span className="trace-list__value">
+                        {routeResult.policy_trace.can_use_tools ? 'erlaubt' : 'gesperrt'}
+                        {routeResult.policy_trace.tool_execution_allowed ? ' · aktiv im Pfad' : ''}
+                      </span>
+                    </div>
+                    <div className="trace-list__row">
+                      <span className="trace-list__label">Internet</span>
+                      <span className="trace-list__value">
+                        {routeResult.policy_trace.can_use_internet ? 'erlaubt' : 'gesperrt'}
+                        {routeResult.policy_trace.internet_execution_allowed ? ' · vorbereiteter Pfad' : ''}
+                      </span>
+                    </div>
+                  </div>
+                </div>
+              )}
+              {routeResult.tool_executions && routeResult.tool_executions.length > 0 && (
+                <div style={{ marginTop: '1rem' }}>
+                  <label className="form-label">Tool Execution</label>
+                  <div className="table-wrap">
+                    <table className="table">
+                      <thead>
+                        <tr>
+                          <th>Tool</th>
+                          <th>Status</th>
+                          <th>Dauer</th>
+                          <th>Grund</th>
+                        </tr>
+                      </thead>
+                      <tbody>
+                        {routeResult.tool_executions.map((execution) => (
+                          <tr key={`${execution.tool_name}-${execution.duration_ms}`}>
+                            <td>
+                              <strong>{execution.tool_name}</strong>
+                              <div className="text--muted text--sm">
+                                {JSON.stringify(execution.arguments)}
+                              </div>
+                            </td>
+                            <td>{execution.success ? 'OK' : 'Fehler'}</td>
+                            <td>{execution.duration_ms} ms</td>
+                            <td>{execution.reason}</td>
+                          </tr>
+                        ))}
+                      </tbody>
+                    </table>
+                  </div>
+                </div>
+              )}
               {routeResult.done_reason && (
                 <div className="kv">
                   <span className="kv__label">Done reason</span>
@@ -235,6 +299,11 @@ export function Diagnostics({ connectionState, onRefresh }: Props) {
                   <span className="kv__value">
                     {routeResult.fairness_risk ?? 'unknown'}
                   </span>
+                </div>
+              )}
+              {routeResult.execution_error && (
+                <div className="alert alert--warn" style={{ marginTop: '0.75rem' }}>
+                  {routeResult.execution_error}
                 </div>
               )}
             </div>

@@ -28,6 +28,16 @@ def create_route_history_entry(
     escalation_threshold: str | None = None,
     fairness_reasons: list[str] | None = None,
     fairness_notes: list[str] | None = None,
+    decision_classification: str = "llm_only",
+    decision_reasons: list[str] | None = None,
+    decision_tool_hints: list[str] | None = None,
+    decision_internet_hints: list[str] | None = None,
+    policy_trace: dict | None = None,
+    execution_mode: str = "llm",
+    execution_status: str = "not_executed",
+    executed_tools: list[str] | None = None,
+    tool_execution_records: list[dict] | None = None,
+    execution_error: str | None = None,
 ) -> None:
     session.add(
         RouteHistory(
@@ -45,6 +55,20 @@ def create_route_history_entry(
             fairness_threshold=escalation_threshold,
             fairness_reasons=json.dumps(fairness_reasons or [], ensure_ascii=False),
             fairness_notes=json.dumps(fairness_notes or [], ensure_ascii=False),
+            decision_classification=decision_classification,
+            decision_reasons=json.dumps(decision_reasons or [], ensure_ascii=False),
+            decision_tool_hints=json.dumps(decision_tool_hints or [], ensure_ascii=False),
+            decision_internet_hints=json.dumps(
+                decision_internet_hints or [], ensure_ascii=False
+            ),
+            policy_trace=json.dumps(policy_trace or {}, ensure_ascii=False, default=str),
+            execution_mode=execution_mode,
+            execution_status=execution_status,
+            executed_tools=json.dumps(executed_tools or [], ensure_ascii=False),
+            tool_execution_records=json.dumps(
+                tool_execution_records or [], ensure_ascii=False, default=str
+            ),
+            execution_error=execution_error,
         )
     )
     session.commit()

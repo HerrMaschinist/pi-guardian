@@ -18,6 +18,9 @@ class Client(SQLModel, table=True):
         "/clients,/history,/logs,/agents,/skills,/actions,/memory"
     )
     api_key: str = Field(unique=True)
+    can_use_llm: bool = True
+    can_use_tools: bool = False
+    can_use_internet: bool = False
     created_at: datetime = Field(default_factory=datetime.now)
 
     def allowed_routes_list(self) -> list[str]:
@@ -48,6 +51,9 @@ class ClientCreate(SQLModel):
             "/memory",
         ]
     )
+    can_use_llm: bool = True
+    can_use_tools: bool = False
+    can_use_internet: bool = False
 
 
 class ClientRead(SQLModel):
@@ -57,6 +63,9 @@ class ClientRead(SQLModel):
     active: bool
     allowed_ip: str
     allowed_routes: list[str]
+    can_use_llm: bool
+    can_use_tools: bool
+    can_use_internet: bool
     # Nur bei POST (Erstellung) gefüllt; bei GET leer
     api_key: str
     created_at: datetime
@@ -68,3 +77,6 @@ class ClientUpdate(SQLModel):
     active: Optional[bool] = None
     allowed_ip: Optional[str] = None
     allowed_routes: Optional[list[str]] = None
+    can_use_llm: Optional[bool] = None
+    can_use_tools: Optional[bool] = None
+    can_use_internet: Optional[bool] = None

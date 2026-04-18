@@ -20,4 +20,14 @@ class RouteHistory(SQLModel, table=True):
     fairness_threshold: str | None = None
     fairness_reasons: str = Field(default="[]")
     fairness_notes: str = Field(default="[]")
+    decision_classification: str = Field(default="llm_only")
+    decision_reasons: str = Field(default="[]")
+    decision_tool_hints: str = Field(default="[]")
+    decision_internet_hints: str = Field(default="[]")
+    policy_trace: str = Field(default="{}")
+    execution_mode: str = Field(default="llm")
+    execution_status: str = Field(default="not_executed")
+    executed_tools: str = Field(default="[]")
+    tool_execution_records: str = Field(default="[]")
+    execution_error: str | None = None
     created_at: datetime = Field(default_factory=datetime.now)

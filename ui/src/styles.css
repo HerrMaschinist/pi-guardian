@@ -259,6 +259,40 @@ code, pre, .font-mono {
   grid-template-columns: minmax(320px, 0.9fr) minmax(420px, 1.1fr);
 }
 
+.result-grid {
+  display: grid;
+  gap: 0.75rem 1rem;
+  grid-template-columns: repeat(auto-fit, minmax(220px, 1fr));
+}
+
+.trace-list {
+  display: flex;
+  flex-direction: column;
+  gap: 0.6rem;
+}
+
+.trace-list__row {
+  display: flex;
+  justify-content: space-between;
+  gap: 1rem;
+  padding: 0.55rem 0.75rem;
+  background: rgba(255, 255, 255, 0.02);
+  border: 1px solid var(--border);
+  border-radius: var(--radius);
+}
+
+.trace-list__label {
+  color: var(--text-secondary);
+  font-family: var(--font-mono);
+  font-size: 0.82rem;
+}
+
+.trace-list__value {
+  color: var(--text-primary);
+  text-align: right;
+  font-size: 0.88rem;
+}
+
 .section {
   margin-top: 1.5rem;
 }
@@ -373,6 +407,40 @@ code, pre, .font-mono {
 .badge--fail .badge__dot {
   background: var(--fail);
   box-shadow: 0 0 6px var(--fail);
+}
+
+.stack {
+  display: flex;
+  flex-direction: column;
+  gap: 0.6rem;
+}
+
+.stack--tight {
+  gap: 0.35rem;
+}
+
+.toggle-card {
+  display: flex;
+  align-items: flex-start;
+  gap: 0.8rem;
+  padding: 0.9rem 1rem;
+  border: 1px solid rgba(148, 163, 184, 0.22);
+  border-radius: 14px;
+  background: rgba(15, 23, 42, 0.32);
+}
+
+.toggle-card input {
+  margin-top: 0.15rem;
+}
+
+.toggle-card span {
+  display: flex;
+  flex-direction: column;
+  gap: 0.2rem;
+}
+
+.toggle-card small {
+  color: var(--color-text-dim);
 }
 
 /* --- Key/Value Pairs --- */
