@@ -98,3 +98,11 @@ class GuardianAlertRecord(GuardianAlertInput):
 
 class GuardianAlertHistory(BaseModel):
     items: list[GuardianAlertRecord] = Field(default_factory=list)
+
+
+class GuardianHistoryResponse(BaseModel):
+    checked_at: datetime = Field(default_factory=lambda: datetime.now(UTC))
+    limit: int = 10
+    snapshots: list[GuardianSnapshotRecord] = Field(default_factory=list)
+    transitions: list[GuardianStateTransitionRecord] = Field(default_factory=list)
+    alerts: list[GuardianAlertRecord] = Field(default_factory=list)

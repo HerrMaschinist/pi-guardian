@@ -1,21 +1,26 @@
 import { defineConfig, loadEnv } from 'vite';
-import react from '@vitejs/plugin-react';
+import vue from '@vitejs/plugin-vue';
 
 export default defineConfig(({ mode }) => {
   const env = loadEnv(mode, process.cwd(), '');
-  const routerHost = env.VITE_ROUTER_HOST || '127.0.0.1';
-  const routerPort = env.VITE_ROUTER_PORT || '8071';
+  const guardianTarget = env.VITE_GUARDIAN_API_TARGET || 'http://127.0.0.1:8000';
+  const guardianPrefix = env.VITE_GUARDIAN_API_PREFIX || '/api/guardian';
 
   return {
-    plugins: [react()],
+    plugins: [vue()],
+    test: {
+      environment: 'jsdom',
+      globals: true,
+      restoreMocks: true,
+    },
     server: {
       host: '0.0.0.0',
       port: 3000,
       proxy: {
-        '/api': {
-          target: `http://${routerHost}:${routerPort}`,
+        [guardianPrefix]: {
+          target: guardianTarget,
           changeOrigin: true,
-          rewrite: (path) => path.replace(/^\/api/, ''),
+          rewrite: (path) => (path.startsWith(guardianPrefix) ? path.slice(guardianPrefix.length) || '/' : path),
         },
       },
     },

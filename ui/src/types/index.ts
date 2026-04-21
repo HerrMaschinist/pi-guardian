@@ -1,405 +1,341 @@
-// === Bestehende API-Typen (SOFORT NUTZBAR) ===
+export type GuardianSeverity = 'ok' | 'info' | 'warn' | 'critical';
+export type GuardianSignalSource = 'router' | 'system' | 'storage' | 'journal' | 'external';
+export type GuardianPolicyOutcome =
+  | 'ignore'
+  | 'log_only'
+  | 'observe'
+  | 'alert_candidate'
+  | 'action_candidate'
+  | 'deferred';
+export type GuardianAlertOutcome = 'send' | 'suppress' | 'failed';
+export type GuardianAlertKind = 'none' | 'warning' | 'critical' | 'recovery' | 'visibility';
 
-export interface HealthResponse {
-  status: string;
-}
-
-export interface RouteRequest {
-  prompt: string;
-  preferred_model?: string | null;
-  stream?: boolean;
-}
-
-export interface RouteResponse {
-  request_id: string;
-  model: string;
-  response: string;
-  done: boolean;
-  done_reason?: string | null;
-  duration_ms: number;
-  decision_classification?: 'llm_only' | 'tool_required' | 'internet_required' | 'blocked';
-  decision_reasons?: string[];
-  decision_tool_hints?: string[];
-  decision_internet_hints?: string[];
-  fairness_review_attempted?: boolean;
-  fairness_review_used?: boolean;
-  fairness_risk?: string;
-  fairness_review_override?: boolean;
-  fairness_reasons?: string[];
-  fairness_notes?: string[];
-  execution_mode?: 'llm' | 'tool' | 'internet_pending';
-  policy_trace?: RoutePolicyTrace | null;
-  tool_executions?: RouteToolExecution[];
-  execution_error?: string | null;
-}
-
-export interface RoutePolicyTrace {
-  can_use_llm: boolean;
-  can_use_tools: boolean;
-  can_use_internet: boolean;
-  decision_classification: 'llm_only' | 'tool_required' | 'internet_required' | 'blocked';
-  tool_execution_allowed: boolean;
-  internet_execution_allowed: boolean;
-}
-
-export interface RouteToolExecution {
-  tool_name: string;
-  arguments: Record<string, unknown>;
-  reason: string;
-  success: boolean;
-  duration_ms: number;
-  output?: unknown;
-  error?: string | null;
-}
-
-// === Geplante API-Typen (BACKEND ERFORDERLICH) ===
-
-export interface RouterSettings {
-  router_host: string;
-  router_port: number;
-  ollama_host: string;
-  ollama_port: number;
-  timeout: number;
-  default_model: string;
-  large_model: string;
-  logging_level: string;
-  stream_default: boolean;
-  require_api_key?: boolean;
-  escalation_threshold?: string;
-  admin_client_name?: string;
-}
-
-export interface SettingsUpdateResponse {
-  settings: RouterSettings;
-  restart_requested: boolean;
-  restart_performed: boolean;
-  restart_message?: string | null;
-  validation_warnings: string[];
-}
-
-export interface OllamaModel {
-  name: string;
-  size: string;
-  modified_at: string;
-  digest: string;
-}
-
-export interface ModelRegistryEntry {
-  id: number;
-  name: string;
-  description: string;
-  role: 'default' | 'large' | 'registered';
-  enabled: boolean;
-  created_at: string;
-  updated_at: string;
-}
-
-export interface ModelPullJob {
-  id: number;
-  model_name: string;
-  status: 'queued' | 'running' | 'succeeded' | 'failed';
-  progress_message: string;
-  progress_percent?: number | null;
-  requested_by?: string | null;
-  result_summary?: string | null;
-  error_message?: string | null;
-  created_at: string;
-  updated_at: string;
-  started_at?: string | null;
-  finished_at?: string | null;
-}
-
-export interface ClientEntry {
-  id: number | string;
-  name: string;
-  description: string;
-  active: boolean;
-  allowed_ip: string;
-  allowed_routes: string[];
-  can_use_llm?: boolean;
-  can_use_tools?: boolean;
-  can_use_internet?: boolean;
-  api_key?: string;
-  enabled?: boolean;
+export interface GuardianEvaluationReason {
+  code: string;
+  summary: string;
+  severity: GuardianSeverity;
+  source: GuardianSignalSource;
+  detail?: string | null;
+  evidence?: Record<string, unknown>;
   created_at?: string;
 }
 
-export interface LogEntry {
-  timestamp: string;
-  level: 'info' | 'warn' | 'error';
-  source: string;
-  message: string;
+export interface GuardianRouterAccessState {
+  value: 'reachable' | 'unreachable' | 'auth_required' | 'partial' | 'unknown';
 }
 
-export interface ServiceStatus {
-  service: string;
-  active: boolean;
-  uptime: string | null;
-  pid: number | null;
-  memory_usage: string | null;
-  cpu_percent: number | null;
+export interface GuardianRouterReadinessState {
+  value: 'healthy' | 'degraded' | 'incomplete' | 'invalid' | 'unavailable' | 'auth_required' | 'unknown';
 }
 
-export interface AgentSettings {
-  active?: boolean;
-  preferred_model?: string | null;
-  max_steps?: number;
-  timeout_seconds?: number | null;
-  read_only?: boolean;
-  policy?: AgentPolicySettings;
-  behavior?: AgentBehaviorSettings;
-  personality?: AgentPersonalitySettings;
-  custom_instruction?: string | null;
+export interface GuardianRouterHealthPayload {
+  status?: string | null;
+  service?: string | null;
+  version?: string | null;
+  router_busy?: boolean | null;
+  ollama_reachable?: boolean | null;
+  configured_models?: Record<string, unknown> | null;
 }
 
-export interface AgentPolicySettings {
-  allowed_tools: string[];
-  allowed_skills: string[];
-  allowed_actions: string[];
-  read_only: boolean;
-  can_propose_actions: boolean;
-  can_use_logs: boolean;
-  can_use_services: boolean;
-  can_use_docker: boolean;
-  max_steps: number;
-  max_tool_calls?: number | null;
+export interface GuardianRouterServiceStatusPayload {
+  service?: string | null;
+  active?: boolean | null;
+  uptime?: string | null;
+  pid?: number | null;
+  memory_usage?: string | null;
+  cpu_percent?: number | null;
 }
 
-export interface AgentBehaviorSettings {
-  analysis_mode: 'summary' | 'balanced' | 'deep';
-  response_depth: 'concise' | 'balanced' | 'detailed';
-  prioritization_style: 'risks_first' | 'ops_first' | 'systems_first';
-  uncertainty_behavior: 'state_uncertainty' | 'ask_clarification' | 'be_conservative';
-  risk_sensitivity: 'low' | 'medium' | 'high';
-}
-
-export interface AgentPersonalitySettings {
-  style: 'analytical' | 'neutral' | 'supportive' | 'strict';
-  tone: 'direct' | 'formal' | 'neutral';
-  directness: 'low' | 'medium' | 'high';
-  verbosity: 'short' | 'balanced' | 'detailed';
-  technical_strictness: 'low' | 'medium' | 'high';
-}
-
-export interface AgentActivitySummary {
-  last_run_id?: string | null;
-  last_run_at?: string | null;
-  last_status?: 'success' | 'failed' | null;
-  last_model?: string | null;
-  last_activity?: string | null;
-  last_result_preview?: string | null;
-  last_duration_ms?: number | null;
-}
-
-export interface AgentDefinition {
-  name: string;
-  description: string;
-  agent_type?: 'system' | 'custom' | 'actor';
-  allowed_tools?: string[];
-  settings?: AgentSettings;
-  system_prompt?: string;
-  read_only?: boolean;
-  enabled?: boolean;
-  max_steps?: number;
-  activity?: AgentActivitySummary | null;
-  [key: string]: unknown;
-}
-
-export interface SkillDefinition {
-  name: string;
-  description: string;
-  allowed_tools?: string[];
-  input_schema?: Record<string, unknown>;
-  output_schema?: Record<string, unknown>;
-  read_only?: boolean;
-  version?: string;
-  enabled?: boolean;
-  [key: string]: unknown;
-}
-
-export interface ActionDefinition {
-  name: string;
-  description: string;
-  allowed_targets?: string[];
-  input_schema?: Record<string, unknown>;
-  output_schema?: Record<string, unknown>;
-  read_only?: boolean;
-  requires_approval?: boolean;
-  version?: string;
-  enabled?: boolean;
-  [key: string]: unknown;
-}
-
-export interface RouteHistoryEntry {
-  id: number;
-  request_id: string;
-  prompt_preview: string;
-  model?: string | null;
-  success: boolean;
-  error_code?: string | null;
-  client_name?: string | null;
-  duration_ms?: number | null;
-  decision_classification?: 'llm_only' | 'tool_required' | 'internet_required' | 'blocked';
-  decision_reasons?: string[];
-  decision_tool_hints?: string[];
-  decision_internet_hints?: string[];
-  fairness_review_attempted?: boolean;
-  fairness_review_used?: boolean;
-  fairness_risk?: string;
-  fairness_review_override?: boolean;
-  escalation_threshold?: string | null;
-  fairness_reasons?: string[];
-  fairness_notes?: string[];
-  policy_trace?: Record<string, unknown>;
-  execution_mode?: 'llm' | 'tool' | 'internet_pending';
-  execution_status?: 'not_executed' | 'succeeded' | 'failed';
-  executed_tools?: string[];
-  tool_execution_records?: Record<string, unknown>[];
-  execution_error?: string | null;
-  created_at: string;
-  [key: string]: unknown;
-}
-
-export interface MemoryRunSummary {
-  run_id: string;
-  agent_name: string;
-  input: string;
-  used_model?: string | null;
-  success: boolean;
-  final_answer: string;
-  started_at: string;
-  finished_at?: string | null;
-}
-
-export interface MemoryStepRead {
-  step_number: number;
-  action_type: string;
-  observation?: string | null;
-  raw_payload: unknown;
-  created_at: string;
-}
-
-export interface MemoryToolCallRead {
-  step_number: number;
-  tool_name: string;
-  arguments: Record<string, unknown>;
-  reason: string;
-  created_at: string;
-}
-
-export interface MemoryToolResultRead {
-  step_number: number;
-  tool_name: string;
-  success: boolean;
-  output: unknown;
-  error?: string | null;
-  created_at: string;
-}
-
-export interface MemorySkillRunRead {
-  step_number: number;
-  skill_name: string;
-  arguments: Record<string, unknown>;
-  reason: string;
-  success: boolean;
-  output: unknown;
-  error?: string | null;
-  created_at: string;
-}
-
-export interface MemoryActionProposalRead {
-  proposal_id: string;
-  run_id?: string | null;
-  agent_name: string;
-  action_name: string;
-  arguments: Record<string, unknown>;
-  reason: string;
-  target?: string | null;
-  requires_approval: boolean;
-  created_at: string;
-}
-
-export interface MemoryActionExecutionRead {
-  proposal_id: string;
-  run_id?: string | null;
-  action_name: string;
-  approved: boolean;
-  success: boolean;
-  output: unknown;
-  error?: string | null;
-  created_at: string;
-}
-
-export interface MemoryApprovalRead {
-  proposal_id: string;
-  approved_by?: string | null;
-  approved_at: string;
-  decision: string;
-  comment?: string | null;
-}
-
-export interface MemoryRunDetail extends MemoryRunSummary {
-  steps: MemoryStepRead[];
-  tool_calls: MemoryToolCallRead[];
-  tool_results: MemoryToolResultRead[];
-  skill_runs: MemorySkillRunRead[];
-  action_proposals: MemoryActionProposalRead[];
-  action_executions: MemoryActionExecutionRead[];
-  approvals: MemoryApprovalRead[];
-}
-
-export interface MemoryIncidentFindingRead {
-  source_type: string;
-  source_ref: string;
-  finding_type: string;
-  content: string;
-  confidence: number;
-}
-
-export interface MemoryIncidentRead {
-  id: number;
-  title: string;
+export interface GuardianFinding {
+  code: string;
   summary: string;
-  severity: string;
-  status: string;
-  related_run_id?: string | null;
-  created_at: string;
-  updated_at: string;
-  findings: MemoryIncidentFindingRead[];
+  severity: GuardianSeverity;
+  source: GuardianSignalSource;
+  detail?: string | null;
+  evidence?: Record<string, unknown>;
+  created_at?: string;
 }
 
-export interface MemoryKnowledgeEntryRead {
-  id: number;
-  title: string;
-  pattern: string;
-  probable_cause: string;
-  recommended_checks: string;
-  recommended_actions: string;
+export interface GuardianRouterProbe {
+  checked_at?: string;
+  status?: GuardianSeverity;
+  action?: string;
+  reachable?: boolean;
+  service_active?: boolean | null;
+  health_result?: {
+    endpoint?: string;
+    ok?: boolean;
+    status_code?: number | null;
+    error_kind?: string | null;
+    error_message?: string | null;
+    payload?: Record<string, unknown> | null;
+  } | null;
+  service_status_result?: {
+    endpoint?: string;
+    ok?: boolean;
+    status_code?: number | null;
+    error_kind?: string | null;
+    error_message?: string | null;
+    payload?: Record<string, unknown> | null;
+  } | null;
+  health?: GuardianRouterHealthPayload | null;
+  service_status?: GuardianRouterServiceStatusPayload | null;
+  findings?: GuardianFinding[];
+  errors?: string[];
+  router_base_url?: string;
+  health_path?: string;
+  status_path?: string;
+}
+
+export interface GuardianRouterCollectorState {
+  checked_at: string;
+  base_url: string;
+  health_path: string;
+  status_path: string;
+  access_state: 'reachable' | 'unreachable' | 'auth_required' | 'partial' | 'unknown';
+  readiness_state: 'healthy' | 'degraded' | 'incomplete' | 'invalid' | 'unavailable' | 'auth_required' | 'unknown';
+  severity: GuardianSeverity;
+  healthy: boolean;
+  degraded: boolean;
+  incomplete: boolean;
+  auth_required: boolean;
+  reachable: boolean;
+  health: GuardianRouterHealthPayload | null;
+  service_status: GuardianRouterServiceStatusPayload | null;
+  findings: GuardianFinding[];
+  notes: string[];
+  probe: GuardianRouterProbe;
+}
+
+export interface GuardianSystemCollectorState {
+  checked_at: string;
+  hostname: string;
+  running_as_root: boolean;
+  process_pid: number;
+  process_name: string;
+  process_uptime_seconds?: number | null;
+  cpu_count?: number | null;
+  cpu_usage_percent?: number | null;
+  load_avg_1m?: number | null;
+  load_avg_5m?: number | null;
+  load_avg_15m?: number | null;
+  cpu_load_ratio_1m?: number | null;
+  memory_total_bytes?: number | null;
+  memory_available_bytes?: number | null;
+  memory_used_bytes?: number | null;
+  memory_usage_percent?: number | null;
+  disk_mountpoint?: string;
+  disk_total_bytes?: number | null;
+  disk_free_bytes?: number | null;
+  disk_used_bytes?: number | null;
+  disk_usage_percent?: number | null;
+  temperature_c?: number | null;
+  temperature_source?: string | null;
+  notes: string[];
+  errors: string[];
+}
+
+export interface GuardianRouterEvaluation {
+  status: GuardianSeverity;
+  summary: string;
+  checked_at: string;
+  reasons: GuardianEvaluationReason[];
+  router: GuardianRouterCollectorState;
+}
+
+export interface GuardianSystemEvaluation {
+  status: GuardianSeverity;
+  summary: string;
+  checked_at: string;
+  reasons: GuardianEvaluationReason[];
+  system: GuardianSystemCollectorState;
+}
+
+export interface GuardianOverviewEvaluation {
+  status: GuardianSeverity;
+  summary: string;
+  checked_at: string;
+  reasons: GuardianEvaluationReason[];
+  router: GuardianRouterEvaluation;
+  system: GuardianSystemEvaluation;
+}
+
+export interface GuardianPersistenceReceipt {
+  ok: boolean;
+  database_path: string;
+  stored_at: string;
+  snapshot_id?: number | null;
+  transition_id?: number | null;
+  changed: boolean;
+  previous_status?: GuardianSeverity | null;
+  current_status?: GuardianSeverity | null;
+  error?: string | null;
+}
+
+export interface GuardianPolicyVisibility {
+  auth_limited: boolean;
+  privilege_limited: boolean;
+  data_limited: boolean;
+  reduced_confidence: boolean;
+  notes: string[];
+}
+
+export interface GuardianPolicyReason {
+  code: string;
+  summary: string;
+  severity: GuardianSeverity;
+  source: GuardianSignalSource;
+  detail?: string | null;
+  evidence?: Record<string, unknown>;
+  created_at?: string;
+}
+
+export interface GuardianPolicyDecision {
+  outcome: GuardianPolicyOutcome;
+  relevance: GuardianSeverity;
+  checked_at: string;
+  summary: string;
+  reasons: GuardianPolicyReason[];
+  visibility: GuardianPolicyVisibility;
+  changed: boolean;
+  transition_relevant: boolean;
+  candidate_alert: boolean;
+  candidate_action: boolean;
+  deferred: boolean;
   confidence: number;
-  confirmed: boolean;
-  source: string;
-  created_at: string;
-  updated_at: string;
+  current_status: GuardianSeverity;
+  previous_status?: GuardianSeverity | null;
+  snapshot_id?: number | null;
+  transition_id?: number | null;
+  persistence_ok: boolean;
+  context: Record<string, unknown>;
 }
 
-export interface MemoryFeedbackEntryRead {
+export interface GuardianAlertSendResult {
+  ok: boolean;
+  chat_id?: string | null;
+  message_id?: number | null;
+  status_code?: number | null;
+  sent_at: string;
+  error?: string | null;
+}
+
+export interface GuardianAlertDecision {
+  outcome: GuardianAlertOutcome;
+  alert_kind: GuardianAlertKind;
+  should_send: boolean;
+  sent: boolean;
+  suppressed: boolean;
+  summary: string;
+  reason_codes: string[];
+  alert_key: string;
+  dedupe_key: string;
+  cooldown_seconds: number;
+  cooldown_remaining_seconds?: number | null;
+  policy_outcome: GuardianPolicyOutcome;
+  current_status: GuardianSeverity;
+  previous_status?: GuardianSeverity | null;
+  changed: boolean;
+  transition_relevant: boolean;
+  telegram_ready: boolean;
+  telegram_ready_reason: string;
+  policy_visibility: GuardianPolicyVisibility;
+  message_text: string;
+  send_result?: GuardianAlertSendResult | null;
+  error?: string | null;
+  context: Record<string, unknown>;
+}
+
+export interface GuardianSnapshotRecord {
   id: number;
-  related_run_id?: string | null;
-  related_incident_id?: number | null;
-  verdict: string;
-  comment: string;
-  created_by: string;
+  checked_at: string;
+  guardian_status: GuardianSeverity;
+  router_status: GuardianSeverity;
+  system_status: GuardianSeverity;
+  overview_summary: string;
+  router_summary: string;
+  system_summary: string;
+  overview_reason_codes: string[];
+  router_reason_codes: string[];
+  system_reason_codes: string[];
+  router_access_state: string;
+  router_readiness_state: string;
+  router_reachable: boolean;
+  router_auth_required: boolean;
+  system_running_as_root: boolean;
+  system_cpu_usage_percent?: number | null;
+  system_memory_usage_percent?: number | null;
+  system_disk_usage_percent?: number | null;
+  system_temperature_c?: number | null;
+  evidence: Record<string, unknown>;
+  stored_at: string;
+}
+
+export interface GuardianStateTransitionRecord {
+  id: number;
   created_at: string;
+  previous_snapshot_id?: number | null;
+  current_snapshot_id: number;
+  from_status: GuardianSeverity;
+  to_status: GuardianSeverity;
+  reason_codes: string[];
+  summary: string;
+  evidence: Record<string, unknown>;
 }
 
-// === UI-interne Typen ===
-
-export type Page = 'dashboard' | 'agents' | 'memory' | 'history' | 'models' | 'clients' | 'settings' | 'diagnostics' | 'logs';
-
-export interface ApiError {
-  message: string;
-  status?: number;
-  timestamp: string;
+export interface GuardianAlertRecord {
+  id: number;
+  checked_at: string;
+  sent_at?: string | null;
+  alert_key: string;
+  dedupe_key: string;
+  alert_kind: string;
+  outcome: string;
+  should_send: boolean;
+  sent: boolean;
+  suppressed_reason?: string | null;
+  current_status: GuardianSeverity;
+  previous_status?: GuardianSeverity | null;
+  policy_outcome: string;
+  changed: boolean;
+  transition_relevant: boolean;
+  cooldown_seconds: number;
+  cooldown_remaining_seconds?: number | null;
+  telegram_ready: boolean;
+  telegram_ready_reason: string;
+  telegram_chat_id?: string | null;
+  telegram_message_id?: number | null;
+  telegram_error?: string | null;
+  reason_codes: string[];
+  summary: string;
+  message_text: string;
+  evidence: Record<string, unknown>;
 }
 
-export type ConnectionState = 'connected' | 'disconnected' | 'checking' | 'error';
+export interface GuardianHistoryResponse {
+  checked_at: string;
+  limit: number;
+  snapshots: GuardianSnapshotRecord[];
+  transitions: GuardianStateTransitionRecord[];
+  alerts: GuardianAlertRecord[];
+}
+
+export interface GuardianStatusResponse {
+  status: GuardianSeverity;
+  component: string;
+  version: string;
+  checked_at: string;
+  router: GuardianRouterCollectorState;
+  router_evaluation: GuardianRouterEvaluation;
+  system: GuardianSystemCollectorState;
+  system_evaluation: GuardianSystemEvaluation;
+  evaluation: GuardianOverviewEvaluation;
+  persistence?: GuardianPersistenceReceipt | null;
+  policy?: GuardianPolicyDecision | null;
+  alerting?: GuardianAlertDecision | null;
+}
+
+export interface GuardianDashboardPayload {
+  status: GuardianStatusResponse;
+  history: GuardianHistoryResponse;
+}

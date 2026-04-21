@@ -1,5 +1,6 @@
 from __future__ import annotations
 
+import asyncio
 from contextlib import asynccontextmanager
 
 from fastapi import FastAPI, Request
@@ -11,7 +12,7 @@ from guardian.app.core.domain import GuardianHealth
 from guardian.app.integrations.router_client import RouterReadClient, RouterReadConfig
 from guardian.app.policy import GuardianPolicyEvaluator
 from guardian.app.services import GuardianHealthService
-from guardian.app.storage import GuardianSQLiteStore, GuardianStorageConfig
+from guardian.app.storage import GuardianHistoryResponse, GuardianSQLiteStore, GuardianStorageConfig
 from guardian.app.system import SystemCollector, SystemEvaluator
 
 
@@ -124,6 +125,25 @@ def _get_guardian_store(request: Request) -> GuardianSQLiteStore:
         store = GuardianSQLiteStore(GuardianStorageConfig.from_env())
         request.app.state.guardian_store = store
     return store
+
+
+@app.get("/history", response_model=GuardianHistoryResponse)
+async def history(request: Request, limit: int = 10) -> GuardianHistoryResponse:
+    """Read-only Guardian history endpoint for snapshots, transitions, and alerts."""
+
+    store = _get_guardian_store(request)
+    safe_limit = max(int(limit), 1)
+    snapshots, transitions, alerts = await asyncio.gather(
+        store.list_snapshots(limit=safe_limit),
+        store.list_transitions(limit=safe_limit),
+        store.list_alerts(limit=safe_limit),
+    )
+    return GuardianHistoryResponse(
+        limit=safe_limit,
+        snapshots=snapshots.items,
+        transitions=transitions,
+        alerts=alerts.items,
+    )
 
 
 @app.get("/health", response_model=GuardianStatusResponse)
