@@ -30,3 +30,4 @@ ui/dist/
 *.sqlite
 *.sqlite3
 *.db
+.backup_2026-04-17_phase*/

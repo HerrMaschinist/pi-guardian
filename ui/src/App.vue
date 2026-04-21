@@ -5,7 +5,7 @@ import GuardianDashboardView from './components/GuardianDashboardView.vue';
 
 <template>
   <GuardianDashboardView
-    :api-base-url="CONFIG.apiBaseUrl"
+    :api-base-path="CONFIG.apiBasePath"
     :history-limit="CONFIG.historyLimit"
     :refresh-interval-ms="CONFIG.refreshIntervalMs"
   />

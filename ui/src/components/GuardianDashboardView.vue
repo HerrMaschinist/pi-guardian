@@ -6,7 +6,6 @@ import { useGuardianDashboard } from '../composables/useGuardianDashboard';
 import {
   alertTone,
   formatBoolean,
-  formatCompactReasonCodes,
   formatDateTime,
   formatPercent,
   formatRatio,
@@ -24,13 +23,13 @@ import SectionCard from './SectionCard.vue';
 import StatusPill from './StatusPill.vue';
 
 interface Props {
-  apiBaseUrl?: string;
+  apiBasePath?: string;
   historyLimit?: number;
   refreshIntervalMs?: number;
 }
 
 const props = withDefaults(defineProps<Props>(), {
-  apiBaseUrl: CONFIG.apiBaseUrl,
+  apiBasePath: CONFIG.apiBasePath,
   historyLimit: CONFIG.historyLimit,
   refreshIntervalMs: CONFIG.refreshIntervalMs,
 });
@@ -48,7 +47,7 @@ const {
   refresh,
   setAutoRefreshEnabled,
 } = useGuardianDashboard({
-  apiBaseUrl: props.apiBaseUrl,
+  apiBasePath: props.apiBasePath,
   historyLimit: props.historyLimit,
   refreshIntervalMs: props.refreshIntervalMs,
 });
@@ -73,6 +72,12 @@ const latestAlert = computed(() => currentHistory.value?.alerts?.[0] ?? null);
 const recentSnapshotItems = computed(() => recentSnapshots(currentHistory.value ?? emptyHistory));
 const recentTransitionItems = computed(() => recentTransitions(currentHistory.value ?? emptyHistory));
 const recentAlertItems = computed(() => recentAlerts(currentHistory.value ?? emptyHistory));
+const historyCounts = computed(() => ({
+  snapshots: currentHistory.value?.snapshots?.length ?? 0,
+  transitions: currentHistory.value?.transitions?.length ?? 0,
+  alerts: currentHistory.value?.alerts?.length ?? 0,
+}));
+const apiMappingLabel = computed(() => `${props.apiBasePath} → ${CONFIG.apiTarget}`);
 
 function autoRefreshLabel() {
   return autoRefreshEnabled.value ? 'Auto-Refresh an' : 'Auto-Refresh aus';
@@ -80,10 +85,6 @@ function autoRefreshLabel() {
 
 function toggleAutoRefresh() {
   setAutoRefreshEnabled(!autoRefreshEnabled.value);
-}
-
-function compactReasonCodes(items?: string[] | null) {
-  return formatCompactReasonCodes(items ?? []);
 }
 
 function visibilityText() {
@@ -101,6 +102,13 @@ function alertStatusTone(value?: string | null) {
 function confidenceLabel() {
   if (!policy.value) return '—';
   return `${Math.round(policy.value.confidence * 100)}%`;
+}
+
+function historySummaryLabel() {
+  const snapshotCount = historyCounts.value.snapshots;
+  const transitionCount = historyCounts.value.transitions;
+  const alertCount = historyCounts.value.alerts;
+  return `${snapshotCount} Snapshots · ${transitionCount} Transitions · ${alertCount} Alerts`;
 }
 </script>
 
@@ -130,8 +138,12 @@ function confidenceLabel() {
             <dd>{{ formatDateTime(lastUpdatedAt) }}</dd>
           </div>
           <div>
-            <dt>API</dt>
-            <dd>{{ props.apiBaseUrl }}</dd>
+            <dt>API-Pfad</dt>
+            <dd>{{ props.apiBasePath }}</dd>
+          </div>
+          <div>
+            <dt>Proxy</dt>
+            <dd>{{ CONFIG.apiTarget }}</dd>
           </div>
           <div>
             <dt>Refresh</dt>
@@ -158,6 +170,14 @@ function confidenceLabel() {
       <strong>Status-Fehler:</strong> {{ statusError }}
     </div>
 
+    <div v-if="historyError" class="status-banner status-banner--warn">
+      <strong>Verlauf-Fehler:</strong> {{ historyError }}
+    </div>
+
+    <div v-if="loading && !current" class="status-banner status-banner--info">
+      Guardian-Daten werden geladen. Die Ansicht bleibt read-only und aktualisiert sich automatisch.
+    </div>
+
     <div class="dashboard-toolbar">
       <button class="button button--primary" type="button" @click="refresh">
         {{ refreshing ? 'Aktualisiere…' : 'Aktualisieren' }}
@@ -172,6 +192,10 @@ function confidenceLabel() {
       <span class="toolbar-hint">
         Letzter Verlaufsscan:
         <strong>{{ formatDateTime(currentHistory?.checked_at) }}</strong>
+      </span>
+      <span class="toolbar-hint">
+        Verlauf:
+        <strong>{{ historySummaryLabel() }}</strong>
       </span>
     </div>
 
@@ -289,7 +313,9 @@ function confidenceLabel() {
 
           <div class="section-block">
             <h3 class="section-block__title">Router-Summary</h3>
-            <p class="section-copy__summary">{{ router?.probe?.health?.status ?? router?.probe?.health_result?.error_message ?? '—' }}</p>
+            <p class="section-copy__summary">
+              {{ router?.notes?.[0] ?? router?.probe?.health?.status ?? router?.probe?.health_result?.error_message ?? '—' }}
+            </p>
           </div>
 
           <div class="section-block">
@@ -350,7 +376,9 @@ function confidenceLabel() {
 
           <div class="section-block">
             <h3 class="section-block__title">System-Summary</h3>
-            <p class="section-copy__summary">{{ system?.errors?.length ? system.errors[0] : 'Systemdaten liegen ohne Fehler vor.' }}</p>
+            <p class="section-copy__summary">
+              {{ system?.errors?.length ? system.errors[0] : system?.notes?.[0] ?? 'Systemdaten liegen ohne Fehler vor.' }}
+            </p>
           </div>
 
           <div class="section-block">
@@ -514,6 +542,10 @@ function confidenceLabel() {
           <StatusPill :tone="latestTransition ? statusTone(latestTransition.to_status) : 'neutral'" :label="latestTransition ? `${statusLabel(latestTransition.from_status)} → ${statusLabel(latestTransition.to_status)}` : 'Kein Wechsel'" />
         </template>
 
+        <div v-if="historyCounts.snapshots === 0" class="empty-state">
+          Noch keine Historie vorhanden. Der Guardian muss mindestens einen erfolgreichen Zyklus abschließen.
+        </div>
+
         <div class="history-grid">
           <article class="history-column">
             <h3 class="section-block__title">Letzte Transitions</h3>
@@ -586,7 +618,7 @@ function confidenceLabel() {
         <span>Latest transition: {{ latestTransition ? formatDateTime(latestTransition.created_at) : '—' }}</span>
       </div>
       <div class="dashboard-footer__row dashboard-footer__row--muted">
-        <span>Guardian API target: {{ CONFIG.apiTarget }}</span>
+        <span>Guardian API mapping: {{ apiMappingLabel }}</span>
         <span>Read only</span>
       </div>
     </footer>

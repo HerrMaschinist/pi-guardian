@@ -9,10 +9,14 @@ const mockedApi = vi.hoisted(() => ({
   fetchGuardianHistory: vi.fn(),
 }));
 
-vi.mock('../src/api/client', () => ({
-  fetchGuardianStatus: mockedApi.fetchGuardianStatus,
-  fetchGuardianHistory: mockedApi.fetchGuardianHistory,
-}));
+vi.mock('../src/api/client', async () => {
+  const actual = await vi.importActual<typeof import('../src/api/client')>('../src/api/client');
+  return {
+    ...actual,
+    fetchGuardianStatus: mockedApi.fetchGuardianStatus,
+    fetchGuardianHistory: mockedApi.fetchGuardianHistory,
+  };
+});
 
 const successPayload: GuardianDashboardPayload = {
   status: {

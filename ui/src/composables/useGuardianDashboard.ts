@@ -1,10 +1,14 @@
 import { computed, onBeforeUnmount, onMounted, ref } from 'vue';
 
-import { fetchGuardianHistory, fetchGuardianStatus } from '../api/client';
+import {
+  describeGuardianApiError,
+  fetchGuardianHistory,
+  fetchGuardianStatus,
+} from '../api/client';
 import type { GuardianHistoryResponse, GuardianStatusResponse } from '../types';
 
 interface UseGuardianDashboardOptions {
-  apiBaseUrl: string;
+  apiBasePath: string;
   historyLimit: number;
   refreshIntervalMs: number;
 }
@@ -32,21 +36,21 @@ export function useGuardianDashboard(options: UseGuardianDashboardOptions) {
     historyError.value = null;
 
     const [statusResult, historyResult] = await Promise.allSettled([
-      fetchGuardianStatus(options.apiBaseUrl),
-      fetchGuardianHistory(options.historyLimit, options.apiBaseUrl),
+      fetchGuardianStatus(options.apiBasePath),
+      fetchGuardianHistory(options.historyLimit, options.apiBasePath),
     ]);
 
     if (statusResult.status === 'fulfilled') {
       status.value = statusResult.value;
       lastUpdatedAt.value = statusResult.value.checked_at;
     } else {
-      statusError.value = statusResult.reason instanceof Error ? statusResult.reason.message : 'Guardian-Status konnte nicht geladen werden.';
+      statusError.value = describeGuardianApiError(statusResult.reason, 'Guardian-Status konnte nicht geladen werden.');
     }
 
     if (historyResult.status === 'fulfilled') {
       history.value = historyResult.value;
     } else {
-      historyError.value = historyResult.reason instanceof Error ? historyResult.reason.message : 'Verlauf konnte nicht geladen werden.';
+      historyError.value = describeGuardianApiError(historyResult.reason, 'Verlauf konnte nicht geladen werden.');
     }
 
     loading.value = false;

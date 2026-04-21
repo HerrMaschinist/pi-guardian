@@ -21,7 +21,47 @@ interface FetchOptions extends RequestInit {
   timeout?: number;
 }
 
-async function fetchJson<T>(path: string, options: FetchOptions = {}): Promise<T> {
+function isAbsoluteUrl(value: string): boolean {
+  return /^https?:\/\//i.test(value);
+}
+
+function normalizeBasePath(value: string): string {
+  const trimmed = value.trim();
+  if (!trimmed) {
+    return '/';
+  }
+  if (isAbsoluteUrl(trimmed)) {
+    return trimmed.replace(/\/+$/, '');
+  }
+  const withLeadingSlash = trimmed.startsWith('/') ? trimmed : `/${trimmed}`;
+  return withLeadingSlash.replace(/\/+$/, '') || '/';
+}
+
+function normalizeEndpoint(value: string): string {
+  const trimmed = value.trim();
+  if (!trimmed) {
+    return '/';
+  }
+  return trimmed.startsWith('/') ? trimmed : `/${trimmed}`;
+}
+
+export function buildGuardianApiUrl(basePath: string, endpoint: string): string {
+  const normalizedBasePath = normalizeBasePath(basePath);
+  const normalizedEndpoint = normalizeEndpoint(endpoint);
+
+  if (isAbsoluteUrl(normalizedBasePath)) {
+    const suffix = normalizedEndpoint.replace(/^\//, '');
+    return new URL(suffix, `${normalizedBasePath}/`).toString();
+  }
+
+  if (normalizedBasePath === '/') {
+    return normalizedEndpoint;
+  }
+
+  return `${normalizedBasePath}${normalizedEndpoint}`;
+}
+
+async function fetchJson<T>(url: string, options: FetchOptions = {}): Promise<T> {
   const { timeout = 10_000, ...requestOptions } = options;
   const controller = new AbortController();
   const timer = window.setTimeout(() => controller.abort(), timeout);
@@ -30,7 +70,7 @@ async function fetchJson<T>(path: string, options: FetchOptions = {}): Promise<T
     const headers = new Headers(requestOptions.headers ?? {});
     headers.set('Accept', 'application/json');
 
-    const response = await fetch(`${CONFIG.apiBaseUrl}${path}`, {
+    const response = await fetch(url, {
       ...requestOptions,
       credentials: 'include',
       signal: controller.signal,
@@ -65,19 +105,38 @@ async function fetchJson<T>(path: string, options: FetchOptions = {}): Promise<T
   }
 }
 
-export async function fetchGuardianStatus(baseUrl = CONFIG.apiBaseUrl): Promise<GuardianStatusResponse> {
-  return fetchJson<GuardianStatusResponse>(`${baseUrl}/health`, { timeout: 15_000 });
+export function describeGuardianApiError(error: unknown, fallback: string): string {
+  if (error instanceof ApiRequestError) {
+    if (error.status > 0) {
+      return `HTTP ${error.status}: ${error.body || error.message}`;
+    }
+    return error.message || fallback;
+  }
+  if (error instanceof Error) {
+    return error.message || fallback;
+  }
+  return fallback;
+}
+
+export async function fetchGuardianStatus(basePath = CONFIG.apiBasePath): Promise<GuardianStatusResponse> {
+  return fetchJson<GuardianStatusResponse>(buildGuardianApiUrl(basePath, '/health'), { timeout: 15_000 });
 }
 
 export async function fetchGuardianHistory(
   limit = CONFIG.historyLimit,
-  baseUrl = CONFIG.apiBaseUrl,
+  basePath = CONFIG.apiBasePath,
 ): Promise<GuardianHistoryResponse> {
   const safeLimit = Number.isFinite(limit) ? Math.max(Math.trunc(limit), 1) : CONFIG.historyLimit;
-  return fetchJson<GuardianHistoryResponse>(`${baseUrl}/history?limit=${safeLimit}`, { timeout: 15_000 });
+  return fetchJson<GuardianHistoryResponse>(
+    buildGuardianApiUrl(basePath, `/history?limit=${safeLimit}`),
+    { timeout: 15_000 },
+  );
 }
 
-export async function fetchGuardianDashboard(baseUrl = CONFIG.apiBaseUrl): Promise<GuardianDashboardPayload> {
-  const [status, history] = await Promise.all([fetchGuardianStatus(baseUrl), fetchGuardianHistory(CONFIG.historyLimit, baseUrl)]);
+export async function fetchGuardianDashboard(basePath = CONFIG.apiBasePath): Promise<GuardianDashboardPayload> {
+  const [status, history] = await Promise.all([
+    fetchGuardianStatus(basePath),
+    fetchGuardianHistory(CONFIG.historyLimit, basePath),
+  ]);
   return { status, history };
 }
