@@ -17,6 +17,13 @@ def _allowed_routes() -> str:
     return ",".join(routes)
 
 
+def _resolve_admin_api_key() -> str:
+    configured_key = settings.ADMIN_CLIENT_API_KEY.strip()
+    if configured_key:
+        return configured_key
+    return generate_api_key()
+
+
 def ensure_admin_client(session: Session) -> Client:
     client = session.exec(
         select(Client).where(Client.name == settings.ADMIN_CLIENT_NAME)
@@ -28,7 +35,7 @@ def ensure_admin_client(session: Session) -> Client:
             active=True,
             allowed_ip=settings.ADMIN_ALLOWED_IP,
             allowed_routes=_allowed_routes(),
-            api_key=generate_api_key(),
+            api_key=_resolve_admin_api_key(),
             can_use_llm=True,
             can_use_tools=True,
             can_use_internet=True,
@@ -49,6 +56,10 @@ def ensure_admin_client(session: Session) -> Client:
     desired_routes = _allowed_routes()
     if client.allowed_routes != desired_routes:
         client.allowed_routes = desired_routes
+        changed = True
+    configured_key = settings.ADMIN_CLIENT_API_KEY.strip()
+    if configured_key and client.api_key != configured_key:
+        client.api_key = configured_key
         changed = True
     if not client.active:
         client.active = True

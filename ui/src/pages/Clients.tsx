@@ -16,6 +16,9 @@ type ClientFormState = {
   active: boolean;
   allowed_ip: string;
   allowed_routes_text: string;
+  can_use_llm: boolean;
+  can_use_tools: boolean;
+  can_use_internet: boolean;
 };
 
 const EMPTY_FORM: ClientFormState = {
@@ -24,6 +27,9 @@ const EMPTY_FORM: ClientFormState = {
   active: true,
   allowed_ip: '',
   allowed_routes_text: '/route',
+  can_use_llm: true,
+  can_use_tools: false,
+  can_use_internet: false,
 };
 
 function routesToText(routes: string[]): string {
@@ -44,6 +50,9 @@ function clientToForm(client: ClientEntry): ClientFormState {
     active: client.active,
     allowed_ip: client.allowed_ip,
     allowed_routes_text: routesToText(client.allowed_routes ?? []),
+    can_use_llm: client.can_use_llm ?? true,
+    can_use_tools: client.can_use_tools ?? false,
+    can_use_internet: client.can_use_internet ?? false,
   };
 }
 
@@ -54,6 +63,9 @@ function makePayload(form: ClientFormState): Omit<ClientEntry, 'id'> {
     active: form.active,
     allowed_ip: form.allowed_ip.trim(),
     allowed_routes: parseRoutes(form.allowed_routes_text),
+    can_use_llm: form.can_use_llm,
+    can_use_tools: form.can_use_tools,
+    can_use_internet: form.can_use_internet,
     api_key: '',
   };
 }
@@ -261,6 +273,7 @@ export function Clients() {
                   <th>Beschreibung</th>
                   <th>IP / Host</th>
                   <th>Routen</th>
+                  <th>Fähigkeiten</th>
                   <th>Status</th>
                   <th>Aktionen</th>
                 </tr>
@@ -280,6 +293,22 @@ export function Clients() {
                     <td className="text--muted">{client.description || '—'}</td>
                     <td><code>{client.allowed_ip}</code></td>
                     <td><code>{routesToText(client.allowed_routes ?? [])}</code></td>
+                    <td>
+                      <div className="stack stack--tight">
+                        <span className={`badge ${client.can_use_llm ? 'badge--ok' : 'badge--fail'}`}>
+                          <span className="badge__dot" />
+                          LLM
+                        </span>
+                        <span className={`badge ${client.can_use_tools ? 'badge--ok' : 'badge--fail'}`}>
+                          <span className="badge__dot" />
+                          Tools
+                        </span>
+                        <span className={`badge ${client.can_use_internet ? 'badge--ok' : 'badge--fail'}`}>
+                          <span className="badge__dot" />
+                          Internet
+                        </span>
+                      </div>
+                    </td>
                     <td>
                       {client.active ? (
                         <span className="badge badge--ok"><span className="badge__dot" />Aktiv</span>
@@ -316,7 +345,7 @@ export function Clients() {
                 ))}
                 {sortedClients.length === 0 && (
                   <tr>
-                    <td colSpan={7} className="text--muted" style={{ textAlign: 'center' }}>
+                    <td colSpan={8} className="text--muted" style={{ textAlign: 'center' }}>
                       Keine Clients registriert.
                     </td>
                   </tr>
@@ -387,6 +416,42 @@ export function Clients() {
           >
             Inaktiv
           </button>
+        </div>
+
+        <div className="grid grid--3" style={{ marginBottom: '1rem' }}>
+          <label className="toggle-card">
+            <input
+              type="checkbox"
+              checked={form.can_use_llm}
+              onChange={(e) => setForm({ ...form, can_use_llm: e.target.checked })}
+            />
+            <span>
+              <strong>LLM</strong>
+              <small>Client darf reine Modellanfragen stellen</small>
+            </span>
+          </label>
+          <label className="toggle-card">
+            <input
+              type="checkbox"
+              checked={form.can_use_tools}
+              onChange={(e) => setForm({ ...form, can_use_tools: e.target.checked })}
+            />
+            <span>
+              <strong>Tools</strong>
+              <small>Client darf toolbasierte Requests anfordern</small>
+            </span>
+          </label>
+          <label className="toggle-card">
+            <input
+              type="checkbox"
+              checked={form.can_use_internet}
+              onChange={(e) => setForm({ ...form, can_use_internet: e.target.checked })}
+            />
+            <span>
+              <strong>Internet</strong>
+              <small>Client darf internetbasierte Requests anfordern</small>
+            </span>
+          </label>
         </div>
 
         <div className="btn-group">

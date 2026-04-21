@@ -19,6 +19,7 @@ class Settings(BaseSettings):
     ESCALATION_THRESHOLD: str = "medium"
     ADMIN_CLIENT_NAME: str = "Router_Admin_UI_Persistent"
     ADMIN_CLIENT_DESCRIPTION: str = "Dedizierter persistenter Admin-Client fuer die Router-UI"
+    ADMIN_CLIENT_API_KEY: str = ""
     ADMIN_SESSION_COOKIE_NAME: str = "pi_guardian_admin_api_key"
     ADMIN_SESSION_COOKIE_MAX_AGE: int = 60 * 60 * 24 * 365
     ADMIN_ALLOWED_IP: str = "192.168.50.0/24"
