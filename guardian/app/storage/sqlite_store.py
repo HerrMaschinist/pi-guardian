@@ -11,6 +11,9 @@ from threading import Lock
 
 from guardian.app.core.domain import GuardianSeverity
 from guardian.app.storage.models import (
+    GuardianAlertHistory,
+    GuardianAlertInput,
+    GuardianAlertRecord,
     GuardianPersistenceReceipt,
     GuardianSnapshotHistory,
     GuardianSnapshotInput,
@@ -64,6 +67,15 @@ class GuardianSQLiteStore:
 
     async def list_snapshots(self, limit: int = 20) -> GuardianSnapshotHistory:
         return await asyncio.to_thread(self._list_snapshots_sync, limit)
+
+    async def record_alert(self, alert: GuardianAlertInput) -> GuardianAlertRecord:
+        return await asyncio.to_thread(self._record_alert_sync, alert)
+
+    async def list_alerts(self, limit: int = 20) -> GuardianAlertHistory:
+        return await asyncio.to_thread(self._list_alerts_sync, limit)
+
+    async def get_last_alert_for_key(self, alert_key: str) -> GuardianAlertRecord | None:
+        return await asyncio.to_thread(self._get_last_alert_for_key_sync, alert_key)
 
     def _connection(self) -> sqlite3.Connection:
         conn = sqlite3.connect(self._path, timeout=5.0)
@@ -125,6 +137,44 @@ class GuardianSQLiteStore:
             )
             conn.execute(
                 "CREATE INDEX IF NOT EXISTS idx_state_transitions_created_at ON state_transitions(created_at DESC)"
+            )
+            conn.execute(
+                """
+                CREATE TABLE IF NOT EXISTS alert_events (
+                    id INTEGER PRIMARY KEY AUTOINCREMENT,
+                    checked_at TEXT NOT NULL,
+                    sent_at TEXT,
+                    alert_key TEXT NOT NULL,
+                    dedupe_key TEXT NOT NULL,
+                    alert_kind TEXT NOT NULL,
+                    outcome TEXT NOT NULL,
+                    should_send INTEGER NOT NULL,
+                    sent INTEGER NOT NULL,
+                    suppressed_reason TEXT,
+                    current_status TEXT NOT NULL,
+                    previous_status TEXT,
+                    policy_outcome TEXT NOT NULL,
+                    changed INTEGER NOT NULL,
+                    transition_relevant INTEGER NOT NULL,
+                    cooldown_seconds INTEGER NOT NULL,
+                    cooldown_remaining_seconds INTEGER,
+                    telegram_ready INTEGER NOT NULL,
+                    telegram_ready_reason TEXT NOT NULL,
+                    telegram_chat_id TEXT,
+                    telegram_message_id INTEGER,
+                    telegram_error TEXT,
+                    reason_codes_json TEXT NOT NULL,
+                    summary TEXT NOT NULL,
+                    message_text TEXT NOT NULL,
+                    evidence_json TEXT NOT NULL
+                )
+                """
+            )
+            conn.execute(
+                "CREATE INDEX IF NOT EXISTS idx_alert_events_checked_at ON alert_events(checked_at DESC)"
+            )
+            conn.execute(
+                "CREATE INDEX IF NOT EXISTS idx_alert_events_key ON alert_events(alert_key, checked_at DESC)"
             )
 
     def _record_cycle_sync(self, snapshot: GuardianSnapshotInput) -> GuardianPersistenceReceipt:
@@ -314,6 +364,108 @@ class GuardianSQLiteStore:
             ).fetchall()
         return GuardianSnapshotHistory(items=[self._row_to_snapshot_record(row) for row in rows])
 
+    def _record_alert_sync(self, alert: GuardianAlertInput) -> GuardianAlertRecord:
+        if self._init_error is not None:
+            raise RuntimeError(self._init_error)
+        with self._lock, self._connection() as conn:
+            sent_at = datetime.now(UTC).isoformat().replace("+00:00", "Z") if alert.sent else None
+            cursor = conn.execute(
+                """
+                INSERT INTO alert_events (
+                    checked_at,
+                    sent_at,
+                    alert_key,
+                    dedupe_key,
+                    alert_kind,
+                    outcome,
+                    should_send,
+                    sent,
+                    suppressed_reason,
+                    current_status,
+                    previous_status,
+                    policy_outcome,
+                    changed,
+                    transition_relevant,
+                    cooldown_seconds,
+                    cooldown_remaining_seconds,
+                    telegram_ready,
+                    telegram_ready_reason,
+                    telegram_chat_id,
+                    telegram_message_id,
+                    telegram_error,
+                    reason_codes_json,
+                    summary,
+                    message_text,
+                    evidence_json
+                ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+                """,
+                (
+                    alert.checked_at.isoformat().replace("+00:00", "Z"),
+                    sent_at,
+                    alert.alert_key,
+                    alert.dedupe_key,
+                    alert.alert_kind,
+                    alert.outcome,
+                    int(alert.should_send),
+                    int(alert.sent),
+                    alert.suppressed_reason,
+                    alert.current_status.value,
+                    alert.previous_status.value if alert.previous_status else None,
+                    alert.policy_outcome,
+                    int(alert.changed),
+                    int(alert.transition_relevant),
+                    alert.cooldown_seconds,
+                    alert.cooldown_remaining_seconds,
+                    int(alert.telegram_ready),
+                    alert.telegram_ready_reason,
+                    alert.telegram_chat_id,
+                    alert.telegram_message_id,
+                    alert.telegram_error,
+                    self._json(alert.reason_codes),
+                    alert.summary,
+                    alert.message_text,
+                    self._json(alert.evidence),
+                ),
+            )
+            row = conn.execute("SELECT * FROM alert_events WHERE id = ?", (int(cursor.lastrowid),)).fetchone()
+            if row is None:
+                raise RuntimeError("failed to load inserted alert event")
+            return self._row_to_alert_record(row)
+
+    def _list_alerts_sync(self, limit: int) -> GuardianAlertHistory:
+        if self._init_error is not None:
+            return GuardianAlertHistory()
+        safe_limit = max(int(limit), 1)
+        with self._lock, self._connection() as conn:
+            rows = conn.execute(
+                """
+                SELECT *
+                FROM alert_events
+                ORDER BY id DESC
+                LIMIT ?
+                """,
+                (safe_limit,),
+            ).fetchall()
+        return GuardianAlertHistory(items=[self._row_to_alert_record(row) for row in rows])
+
+    def _get_last_alert_for_key_sync(self, alert_key: str) -> GuardianAlertRecord | None:
+        if self._init_error is not None:
+            return None
+        with self._lock, self._connection() as conn:
+            row = conn.execute(
+                """
+                SELECT *
+                FROM alert_events
+                WHERE alert_key = ?
+                ORDER BY id DESC
+                LIMIT 1
+                """,
+                (alert_key,),
+            ).fetchone()
+        if row is None:
+            return None
+        return self._row_to_alert_record(row)
+
     def _load_last_snapshot_row(self, conn: sqlite3.Connection) -> sqlite3.Row | None:
         row = conn.execute(
             """
@@ -361,6 +513,37 @@ class GuardianSQLiteStore:
             to_status=GuardianSeverity(row["to_status"]),
             reason_codes=self._json_loads(row["reason_codes_json"]),
             summary=row["summary"],
+            evidence=self._json_loads(row["evidence_json"]),
+        )
+
+    def _row_to_alert_record(self, row: sqlite3.Row) -> GuardianAlertRecord:
+        sent_at_raw = row["sent_at"]
+        return GuardianAlertRecord(
+            id=int(row["id"]),
+            checked_at=self._parse_datetime(row["checked_at"]),
+            sent_at=self._parse_datetime(sent_at_raw) if sent_at_raw else None,
+            alert_key=row["alert_key"],
+            dedupe_key=row["dedupe_key"],
+            alert_kind=row["alert_kind"],
+            outcome=row["outcome"],
+            should_send=bool(row["should_send"]),
+            sent=bool(row["sent"]),
+            suppressed_reason=row["suppressed_reason"],
+            current_status=GuardianSeverity(row["current_status"]),
+            previous_status=GuardianSeverity(row["previous_status"]) if row["previous_status"] else None,
+            policy_outcome=row["policy_outcome"],
+            changed=bool(row["changed"]),
+            transition_relevant=bool(row["transition_relevant"]),
+            cooldown_seconds=int(row["cooldown_seconds"]),
+            cooldown_remaining_seconds=row["cooldown_remaining_seconds"],
+            telegram_ready=bool(row["telegram_ready"]),
+            telegram_ready_reason=row["telegram_ready_reason"],
+            telegram_chat_id=row["telegram_chat_id"],
+            telegram_message_id=row["telegram_message_id"],
+            telegram_error=row["telegram_error"],
+            reason_codes=self._json_loads(row["reason_codes_json"]),
+            summary=row["summary"],
+            message_text=row["message_text"],
             evidence=self._json_loads(row["evidence_json"]),
         )
 

@@ -4,6 +4,7 @@ from contextlib import asynccontextmanager
 
 from fastapi import FastAPI, Request
 
+from guardian.app.alerting import GuardianAlertingConfig, GuardianAlertingService, GuardianTelegramClient, GuardianTelegramConfig
 from guardian.app.collectors import RouterCollector
 from guardian.app.evaluators import GuardianStatusResponse, GuardianOverviewEvaluator, RouterEvaluator
 from guardian.app.core.domain import GuardianHealth
@@ -18,6 +19,12 @@ from guardian.app.system import SystemCollector, SystemEvaluator
 async def lifespan(app: FastAPI):
     router_client = RouterReadClient(RouterReadConfig.from_env())
     guardian_store = GuardianSQLiteStore(GuardianStorageConfig.from_env())
+    telegram_client = GuardianTelegramClient(GuardianTelegramConfig.from_env())
+    alerting_service = GuardianAlertingService(
+        telegram_client=telegram_client,
+        config=GuardianAlertingConfig.from_env(),
+        store=guardian_store,
+    )
     app.state.router_client = router_client
     app.state.router_collector = RouterCollector(router_client)
     app.state.router_evaluator = RouterEvaluator()
@@ -25,6 +32,8 @@ async def lifespan(app: FastAPI):
     app.state.system_evaluator = SystemEvaluator()
     app.state.overview_evaluator = GuardianOverviewEvaluator()
     app.state.policy_evaluator = GuardianPolicyEvaluator()
+    app.state.telegram_client = telegram_client
+    app.state.alerting_service = alerting_service
     app.state.guardian_store = guardian_store
     app.state.health_service = GuardianHealthService(
         router_collector=app.state.router_collector,
@@ -33,12 +42,14 @@ async def lifespan(app: FastAPI):
         system_evaluator=app.state.system_evaluator,
         overview_evaluator=app.state.overview_evaluator,
         policy_evaluator=app.state.policy_evaluator,
+        alerting_service=alerting_service,
         store=guardian_store,
     )
     try:
         yield
     finally:
         await router_client.aclose()
+        await telegram_client.aclose()
 
 
 app = FastAPI(

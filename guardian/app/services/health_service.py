@@ -2,6 +2,7 @@ from __future__ import annotations
 
 import asyncio
 
+from guardian.app.alerting import GuardianAlertingService
 from guardian.app.collectors import RouterCollector
 from guardian.app.evaluators import GuardianOverviewEvaluator, GuardianStatusResponse, RouterEvaluator
 from guardian.app.policy import GuardianPolicyEvaluator
@@ -21,6 +22,7 @@ class GuardianHealthService:
         system_evaluator: SystemEvaluator,
         overview_evaluator: GuardianOverviewEvaluator,
         policy_evaluator: GuardianPolicyEvaluator,
+        alerting_service: GuardianAlertingService | None = None,
         store: GuardianSQLiteStore,
     ) -> None:
         self._router_collector = router_collector
@@ -29,6 +31,7 @@ class GuardianHealthService:
         self._system_evaluator = system_evaluator
         self._overview_evaluator = overview_evaluator
         self._policy_evaluator = policy_evaluator
+        self._alerting_service = alerting_service
         self._store = store
 
     async def run(self, started_component: str, started_version: str) -> GuardianStatusResponse:
@@ -51,7 +54,10 @@ class GuardianHealthService:
         )
         persistence = await self._store.record_cycle(self._build_snapshot_input(response))
         policy = await self._policy_evaluator.evaluate(response, persistence, self._store)
-        return response.model_copy(update={"persistence": persistence, "policy": policy})
+        alerting = None
+        if self._alerting_service is not None:
+            alerting = await self._alerting_service.evaluate_and_dispatch(response, policy, persistence)
+        return response.model_copy(update={"persistence": persistence, "policy": policy, "alerting": alerting})
 
     def _build_snapshot_input(self, response: GuardianStatusResponse) -> GuardianSnapshotInput:
         router_state = response.router

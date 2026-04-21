@@ -62,3 +62,39 @@ class GuardianPersistenceReceipt(BaseModel):
 
 class GuardianSnapshotHistory(BaseModel):
     items: list[GuardianSnapshotRecord] = Field(default_factory=list)
+
+
+class GuardianAlertInput(BaseModel):
+    checked_at: datetime = Field(default_factory=lambda: datetime.now(UTC))
+    alert_key: str
+    dedupe_key: str
+    alert_kind: str
+    outcome: str
+    should_send: bool
+    sent: bool
+    suppressed_reason: str | None = None
+    current_status: GuardianSeverity
+    previous_status: GuardianSeverity | None = None
+    policy_outcome: str
+    changed: bool = False
+    transition_relevant: bool = False
+    cooldown_seconds: int = 0
+    cooldown_remaining_seconds: int | None = None
+    telegram_ready: bool = False
+    telegram_ready_reason: str = "unconfigured"
+    telegram_chat_id: str | None = None
+    telegram_message_id: int | None = None
+    telegram_error: str | None = None
+    reason_codes: list[str] = Field(default_factory=list)
+    summary: str
+    message_text: str = ""
+    evidence: dict[str, Any] = Field(default_factory=dict)
+
+
+class GuardianAlertRecord(GuardianAlertInput):
+    id: int
+    sent_at: datetime | None = None
+
+
+class GuardianAlertHistory(BaseModel):
+    items: list[GuardianAlertRecord] = Field(default_factory=list)

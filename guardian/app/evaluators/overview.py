@@ -5,6 +5,7 @@ from datetime import UTC, datetime
 from pydantic import BaseModel, Field
 
 from guardian.app.collectors.router_collector import GuardianRouterCollectorState
+from guardian.app.alerting.models import GuardianAlertDecision
 from guardian.app.core.domain import GuardianSeverity, GuardianSignalSource
 from guardian.app.evaluators.common import GuardianEvaluationReason
 from guardian.app.evaluators.router_evaluator import GuardianRouterEvaluation
@@ -35,6 +36,7 @@ class GuardianStatusResponse(BaseModel):
     evaluation: GuardianOverviewEvaluation
     persistence: GuardianPersistenceReceipt | None = None
     policy: GuardianPolicyDecision | None = None
+    alerting: GuardianAlertDecision | None = None
 
 
 class GuardianOverviewEvaluator:
