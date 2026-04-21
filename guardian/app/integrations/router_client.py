@@ -97,14 +97,6 @@ class GuardianRouterProbe(BaseModel):
     status_path: str = "/status/service"
 
 
-class GuardianHealthResponse(BaseModel):
-    status: GuardianSeverity
-    component: str = "guardian"
-    version: str = "0.1.0"
-    checked_at: datetime = Field(default_factory=lambda: datetime.now(UTC))
-    router: GuardianRouterProbe
-
-
 @dataclass(frozen=True, slots=True)
 class RouterReadConfig:
     base_url: str

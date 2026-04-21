@@ -66,14 +66,6 @@ class GuardianRouterCollectorState(BaseModel):
     probe: GuardianRouterProbe
 
 
-class GuardianHealthResponse(BaseModel):
-    status: GuardianSeverity
-    component: str = "guardian"
-    version: str = "0.1.0"
-    checked_at: datetime = Field(default_factory=lambda: datetime.now(UTC))
-    router: GuardianRouterCollectorState
-
-
 class RouterCollector:
     """Normalizes router probe data into a Guardian-facing state."""
 

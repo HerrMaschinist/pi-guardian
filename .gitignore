@@ -10,6 +10,8 @@ router/**/*.pyc
 router/*.pyc
 guardian/**/__pycache__/
 guardian/**/*.pyc
+tests/**/__pycache__/
+tests/**/*.pyc
 
 # Laufzeitdaten
 router/data/*

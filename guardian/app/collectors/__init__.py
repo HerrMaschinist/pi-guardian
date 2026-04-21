@@ -1,7 +1,6 @@
 """Guardian collectors."""
 
 from .router_collector import (
-    GuardianHealthResponse,
     GuardianRouterCollectorState,
     GuardianRouterCollectorSummary,
     GuardianRouterAccessState,
@@ -10,7 +9,6 @@ from .router_collector import (
 )
 
 __all__ = [
-    "GuardianHealthResponse",
     "GuardianRouterCollectorState",
     "GuardianRouterCollectorSummary",
     "GuardianRouterAccessState",

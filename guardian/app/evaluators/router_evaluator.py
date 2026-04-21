@@ -21,15 +21,6 @@ class GuardianRouterEvaluation(BaseModel):
     router: GuardianRouterCollectorState
 
 
-class GuardianEvaluationResponse(BaseModel):
-    status: GuardianSeverity
-    component: str = "guardian"
-    version: str = "0.1.0"
-    checked_at: datetime = Field(default_factory=lambda: datetime.now(UTC))
-    router: GuardianRouterCollectorState
-    evaluation: GuardianRouterEvaluation
-
-
 class RouterEvaluator:
     """Deterministically evaluates the normalized router state."""
 
