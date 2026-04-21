@@ -8,12 +8,16 @@ router/.pytest_cache/
 router/**/__pycache__/
 router/**/*.pyc
 router/*.pyc
+guardian/**/__pycache__/
+guardian/**/*.pyc
 
 # Laufzeitdaten
 router/data/*
 !router/data/.gitkeep
 router/logs/*
 !router/logs/.gitkeep
+guardian/data/*
+!guardian/data/.gitkeep
 
 # UI
 ui/node_modules/
